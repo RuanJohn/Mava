@@ -39,7 +39,7 @@ from sacred import run
 from mava.evaluator import evaluator_setup
 from mava.logger import logger_setup
 from mava.types import ExperimentOutput, LearnerState, OptStates, Params, PPOTransition
-from mava.utils.jax import merge_leading_dims
+from mava.utils.jax_utils import merge_leading_dims
 from mava.utils.logger_tools import get_sacred_exp
 from mava.utils.timing_utils import TimeIt
 from mava.wrappers.jumanji import AgentIDWrapper, LogWrapper, RwareMultiAgentWrapper

@@ -298,10 +298,12 @@ def evaluator_setup(
             10,
         )
     else:
-        vmapped_eval_network_apply_fn = jax.vmap(
-            network.apply,
-            in_axes=(None, 0),
-        )
+        # TODO(Ruan): Set with if statements instead for easy comparisons.
+        # vmapped_eval_network_apply_fn = jax.vmap(
+        #     network.apply,
+        #     in_axes=(None, 0),
+        # )
+        vmapped_eval_network_apply_fn = network.apply
         evaluator = get_ff_evaluator_fn(
             eval_env,
             vmapped_eval_network_apply_fn,

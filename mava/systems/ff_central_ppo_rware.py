@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import copy
 from logging import Logger as SacredLogger
 from typing import Any, Callable, Dict, Sequence, Tuple
@@ -41,12 +42,7 @@ from mava.types import ExperimentOutput, LearnerState, OptStates, Params, PPOTra
 from mava.utils.jax_utils import merge_leading_dims
 from mava.utils.logger_tools import get_sacred_exp
 from mava.utils.timing_utils import TimeIt
-from mava.wrappers.jumanji import (
-    AgentIDWrapper,
-    LogWrapper,
-    ObservationGlobalState,
-    RwareMultiAgentWithGlobalStateWrapper,
-)
+from mava.wrappers.jumanji import LogWrapper, RwareCentralControllerWrapper
 
 
 class Actor(nn.Module):
@@ -70,7 +66,7 @@ class Actor(nn.Module):
         )(actor_output)
 
         masked_logits = jnp.where(
-            observation.action_mask,
+            observation.joint_action_mask,
             actor_output,
             jnp.finfo(jnp.float32).min,
         )
@@ -87,7 +83,7 @@ class Critic(nn.Module):
         """Forward pass."""
 
         critic_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
-            observation.global_state
+            observation.agents_view
         )
         critic_output = nn.relu(critic_output)
         critic_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
@@ -109,7 +105,7 @@ def get_learner_fn(
 ) -> Callable:
     """Get the learner function."""
 
-    # Unpack apply and update functions.
+    # Get apply and update functions for actor and critic networks.
     actor_apply_fn, critic_apply_fn = apply_fns
     actor_update_fn, critic_update_fn = update_fns
 
@@ -146,10 +142,8 @@ def get_learner_fn(
             env_state, timestep = jax.vmap(env.step, in_axes=(0, 0))(env_state, action)
 
             # LOG EPISODE METRICS
-            done, reward = jax.tree_util.tree_map(
-                lambda x: jnp.repeat(x, config["num_agents"]).reshape(config["num_envs"], -1),
-                (timestep.last(), timestep.reward),
-            )
+            done = timestep.last()
+            reward = timestep.reward
             info = {
                 "episode_return": env_state.episode_return_info,
                 "episode_length": env_state.episode_length_info,
@@ -303,6 +297,7 @@ def get_learner_fn(
                 )
                 critic_new_params = optax.apply_updates(params.critic_params, critic_updates)
 
+                # PACK NEW PARAMS AND OPTIMISER STATE
                 new_params = Params(actor_new_params, critic_new_params)
                 new_opt_state = OptStates(actor_new_opt_state, critic_new_opt_state)
 
@@ -364,7 +359,7 @@ def get_learner_fn(
         Args:
             learner_state (NamedTuple):
                 - params (Params): The initial model parameters.
-                - opt_states (OptStates): The initial optimizer states.
+                - opt_states (OptStates): The initial optimizer state.
                 - rng (chex.PRNGKey): The random number generator state.
                 - env_state (LogEnvState): The environment state.
                 - timesteps (TimeStep): The initial timestep in the initial trajectory.
@@ -395,10 +390,8 @@ def learner_setup(
     # Get available TPU cores.
     n_devices = len(jax.devices())
 
-    # Get number of actions and agents.
-    num_actions = int(env.action_spec().num_values[0])
-    num_agents = env.action_spec().shape[0]
-    config["num_agents"] = num_agents
+    # Get number of actions.
+    num_actions = int(env.action_spec().num_values)
 
     # PRNG keys.
     rng, rng_p = rngs
@@ -415,15 +408,8 @@ def learner_setup(
         optax.adam(config["critic_lr"], eps=1e-5),
     )
 
-    # Initialise observation.
-    obs = env.observation_spec().generate_value()
-    # Select only obs for a single agent.
-    init_x = ObservationGlobalState(
-        agents_view=obs.agents_view[0],
-        action_mask=obs.action_mask[0],
-        global_state=obs.global_state[0],
-        step_count=obs.step_count[0],
-    )
+    # Initialise observation: Select only obs for a single agent.
+    init_x = env.observation_spec().generate_value()
     init_x = jax.tree_util.tree_map(lambda x: x[None, ...], init_x)
 
     # Initialise actor params and optimiser state.
@@ -434,20 +420,8 @@ def learner_setup(
     critic_params = critic_network.init(rng_p, init_x)
     critic_opt_state = critic_optim.init(critic_params)
 
-    # Vmap network apply function over number of agents.
-    vmapped_actor_network_apply_fn = jax.vmap(
-        actor_network.apply,
-        in_axes=(None, 1),
-        out_axes=(1),
-    )
-    vmapped_critic_network_apply_fn = jax.vmap(
-        critic_network.apply,
-        in_axes=(None, 1),
-        out_axes=(1),
-    )
-
     # Pack apply and update functions.
-    apply_fns = (vmapped_actor_network_apply_fn, vmapped_critic_network_apply_fn)
+    apply_fns = (actor_network.apply, critic_network.apply)
     update_fns = (actor_optim.update, critic_optim.update)
 
     # Get batched iterated update and replicate it to pmap it over cores.
@@ -497,16 +471,11 @@ def run_experiment(_run: run.Run, _config: Dict, _log: SacredLogger) -> None:
     # Create envs
     generator = RandomGenerator(**config["rware_scenario"]["task_config"])
     env = jumanji.make(config["env_name"], generator=generator)
-    env = RwareMultiAgentWithGlobalStateWrapper(env)
-    # Add agent id to observation.
-    if config["add_agent_id"]:
-        env = AgentIDWrapper(env=env, has_global_state=True)
+    env = RwareCentralControllerWrapper(env)
     env = AutoResetWrapper(env)
     env = LogWrapper(env)
     eval_env = jumanji.make(config["env_name"], generator=generator)
-    eval_env = RwareMultiAgentWithGlobalStateWrapper(eval_env)
-    if config["add_agent_id"]:
-        eval_env = AgentIDWrapper(env=eval_env, has_global_state=True)
+    eval_env = RwareCentralControllerWrapper(eval_env)
 
     # PRNG keys.
     rng, rng_e, rng_p = jax.random.split(jax.random.PRNGKey(config["seed"]), num=3)
@@ -597,13 +566,13 @@ def hydra_entry_point(cfg: DictConfig) -> None:
     # Convert config to python dict.
     cfg: Dict = OmegaConf.to_container(cfg, resolve=True)
 
-    ex = get_sacred_exp(cfg, "ff_mappo_rware")
+    ex = get_sacred_exp(cfg, "ff_ippo_rware")
 
     # Run experiment.
     ex.main(run_experiment)
     ex.run(config_updates={})
 
-    print(f"{Fore.CYAN}{Style.BRIGHT}MAPPO experiment completed{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{Style.BRIGHT}IPPO experiment completed{Style.RESET_ALL}")
 
 
 if __name__ == "__main__":

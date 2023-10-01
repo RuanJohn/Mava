@@ -22,6 +22,8 @@ from jumanji.environments.routing.robot_warehouse import Observation, State
 from jumanji.types import TimeStep
 from jumanji.wrappers import Wrapper
 
+from mava.utils.central_agent_utils import action_combinations, joint_action_mask
+
 if TYPE_CHECKING:  # https://github.com/python/mypy/issues/6239
     from dataclasses import dataclass
 else:
@@ -43,6 +45,23 @@ class ObservationGlobalState(NamedTuple):
     agents_view: chex.Array  # (num_agents, num_obs_features)
     action_mask: chex.Array  # (num_agents, 5)
     global_state: chex.Array  # (num_agents * num_obs_features, )
+    step_count: chex.Array  # (num_agents, )
+
+
+class ObservationCentralController(NamedTuple):
+    """The observation that the agent sees.
+    agents_view: the agents' view of other agents and shelves within their
+        sensor range. The number of features in the observation array
+        depends on the sensor range of the agent.
+    action_mask: boolean array specifying, for each agent, which action
+        (up, right, down, left) is legal.
+    joint_action_mask: actions mask for centralised controller agent.
+    step_count: the number of steps elapsed since the beginning of the episode.
+    """
+
+    agents_view: chex.Array  # (num_agents, num_obs_features)
+    action_mask: chex.Array  # (num_agents, 5)
+    joint_action_mask: chex.Array  # (num_actions ** num_agents,)
     step_count: chex.Array  # (num_agents, )
 
 
@@ -167,6 +186,74 @@ class AgentIDWrapper(Wrapper):
         return self._env.observation_spec().replace(
             agents_view=agents_view,
         )
+
+
+class RwareCentralControllerWrapper(Wrapper):
+    def __init__(self, env: Environment):
+        super().__init__(env)
+        self.num_actions = int(env.action_spec().num_values[0])
+        self.joint_action_combinations = action_combinations(self._env.num_agents, self.num_actions)
+
+    def reset(self, key: chex.PRNGKey) -> Tuple[State, TimeStep]:
+        state, timestep = self._env.reset(key)
+
+        global_state = jnp.concatenate(timestep.observation.agents_view, axis=0)
+        joint_action_mask_ = joint_action_mask(
+            timestep.observation.action_mask, self.joint_action_combinations
+        )
+        timestep.observation = ObservationCentralController(
+            agents_view=global_state,
+            action_mask=timestep.observation.action_mask,
+            joint_action_mask=joint_action_mask_,
+            step_count=timestep.observation.step_count,
+        )
+        return state, timestep
+
+    def step(self, state: State, action: chex.Array) -> Tuple[State, TimeStep]:
+        team_action = self.joint_action_combinations[action]
+        state, timestep = self._env.step(state, team_action)
+
+        global_state = jnp.concatenate(timestep.observation.agents_view, axis=0)
+        joint_action_mask_ = joint_action_mask(
+            timestep.observation.action_mask, self.joint_action_combinations
+        )
+        timestep.observation = ObservationCentralController(
+            agents_view=global_state,
+            action_mask=timestep.observation.action_mask,
+            joint_action_mask=joint_action_mask_,
+            step_count=timestep.observation.step_count,
+        )
+        return state, timestep
+
+    def observation_spec(self) -> specs.Spec[Observation]:
+        """Specification of the observation of the `RobotWarehouse` environment."""
+        agents_view = specs.Array(
+            (self._env.num_agents * self._env.num_obs_features,), jnp.int32, "agents_view"
+        )
+        joint_action_mask_ = specs.BoundedArray(
+            (self.num_actions**self._env.num_agents,), bool, False, True, "action_mask"
+        )
+        action_mask = specs.BoundedArray(
+            (self._env.num_agents, 5), bool, False, True, "action_mask"
+        )
+        step_count = specs.BoundedArray((), jnp.int32, 0, self.time_limit, "step_count")
+
+        return specs.Spec(
+            ObservationCentralController,
+            "ObservationSpec",
+            agents_view=agents_view,
+            action_mask=action_mask,
+            joint_action_mask=joint_action_mask_,
+            step_count=step_count,
+        )
+
+    def action_spec(self) -> specs.DiscreteArray:
+        joint_action_spec = specs.DiscreteArray(
+            num_values=self.num_actions**self._env.num_agents,
+            name="action",
+            dtype=jnp.int32,
+        )
+        return joint_action_spec
 
 
 class RwareMultiAgentWrapper(Wrapper):

@@ -46,6 +46,6 @@ base_exp_path: results
 system_name: ~  # this is manually set inside each file depending on which system is run
 # Neptune logging
 use_neptune: False
-neptune_project: Instadeep/Mava
-neptune_tag: [rware]
+neptune_project: ruan-john/centralised-marl
+neptune_tag: [test]
 name: None # Unique ID from logging.
