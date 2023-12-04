@@ -59,6 +59,23 @@ class ObservationGlobalState(NamedTuple):
     step_count: chex.Array  # (num_agents, )
 
 
+class ObservationCentralController(NamedTuple):
+    """The observation that the agent sees.
+    agents_view: the agents' view of other agents and shelves within their
+        sensor range. The number of features in the observation array
+        depends on the sensor range of the agent.
+    action_mask: boolean array specifying, for each agent, which action
+        (up, right, down, left) is legal.
+    joint_action_mask: actions mask for centralised controller agent.
+    step_count: the number of steps elapsed since the beginning of the episode.
+    """
+
+    agents_view: chex.Array  # (num_agents, num_obs_features)
+    action_mask: chex.Array  # (num_agents, num_actions)
+    joint_action_mask: chex.Array  # (num_actions ** num_agents,)
+    step_count: chex.Array  # (num_agents, )
+
+
 @dataclass
 class LogEnvState:
     """State of the `LogWrapper`."""
