@@ -11,22 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import copy
 import time
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
 import chex
+import distrax
+import flax.linen as nn
 import hydra
 import jax
 import jax.numpy as jnp
-import jumanji
+import numpy as np
 import optax
 from colorama import Fore, Style
 from flax import jax_utils
 from flax.core.frozen_dict import FrozenDict
+from flax.linen.initializers import constant, orthogonal
 from jumanji.env import Environment
-from jumanji.environments.routing.robot_warehouse.generator import RandomGenerator
-from jumanji.wrappers import AutoResetWrapper
 from omegaconf import DictConfig, OmegaConf
 from optax._src.base import OptState
 from rich.pretty import pprint
@@ -39,28 +41,77 @@ from mava.types import (
     ExperimentOutput,
     LearnerFn,
     LearnerState,
-    ObservationGlobalState,
+    Observation,
     OptStates,
     Params,
     PPOTransition,
 )
 from mava.utils.checkpointing import Checkpointer
 from mava.utils.jax import merge_leading_dims
-from mava.utils.networks import FFActor as Actor
-from mava.utils.networks import FFCritic as Critic
-from mava.wrappers.jumanji import RwareWrapper
-from mava.wrappers.shared import AgentIDWrapper, GlobalStateWrapper, LogWrapper
+from mava.utils.make_env import make
+
+
+class Actor(nn.Module):
+    """Actor Network."""
+
+    action_dim: Sequence[int]
+
+    @nn.compact
+    def __call__(self, observation: Observation) -> distrax.Categorical:
+        """Forward pass."""
+        x = observation.agents_view
+
+        actor_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
+        actor_output = nn.relu(actor_output)
+        actor_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
+            actor_output
+        )
+        actor_output = nn.relu(actor_output)
+        actor_output = nn.Dense(
+            self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
+        )(actor_output)
+
+        masked_logits = jnp.where(
+            observation.action_mask,
+            actor_output,
+            jnp.finfo(jnp.float32).min,
+        )
+        actor_policy = distrax.Categorical(logits=masked_logits)
+
+        return actor_policy
+
+
+class Critic(nn.Module):
+    """Critic Network."""
+
+    @nn.compact
+    def __call__(self, observation: Observation) -> chex.Array:
+        """Forward pass."""
+
+        critic_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
+            observation.agents_view
+        )
+        critic_output = nn.relu(critic_output)
+        critic_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
+            critic_output
+        )
+        critic_output = nn.relu(critic_output)
+        critic_output = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(
+            critic_output
+        )
+
+        return jnp.squeeze(critic_output, axis=-1)
 
 
 def get_learner_fn(
-    env: jumanji.Environment,
+    env: Environment,
     apply_fns: Tuple[ActorApply, CriticApply],
     update_fns: Tuple[optax.TransformUpdateFn, optax.TransformUpdateFn],
     config: Dict,
 ) -> LearnerFn[LearnerState]:
     """Get the learner function."""
 
-    # Unpack apply and update functions.
+    # Get apply and update functions for actor and critic networks.
     actor_apply_fn, critic_apply_fn = apply_fns
     actor_update_fn, critic_update_fn = update_fns
 
@@ -257,6 +308,7 @@ def get_learner_fn(
                 )
                 critic_new_params = optax.apply_updates(params.critic_params, critic_updates)
 
+                # PACK NEW PARAMS AND OPTIMISER STATE
                 new_params = Params(actor_new_params, critic_new_params)
                 new_opt_state = OptStates(actor_new_opt_state, critic_new_opt_state)
 
@@ -320,7 +372,7 @@ def get_learner_fn(
         Args:
             learner_state (NamedTuple):
                 - params (Params): The initial model parameters.
-                - opt_states (OptStates): The initial optimizer states.
+                - opt_states (OptStates): The initial optimizer state.
                 - rng (chex.PRNGKey): The random number generator state.
                 - env_state (LogEnvState): The environment state.
                 - timesteps (TimeStep): The initial timestep in the initial trajectory.
@@ -372,15 +424,9 @@ def learner_setup(
         optax.adam(config["system"]["critic_lr"], eps=1e-5),
     )
 
-    # Initialise observation.
-    obs = env.observation_spec().generate_value()
-    # Select only obs for a single agent.
-    init_x = ObservationGlobalState(
-        agents_view=obs.agents_view[0],
-        action_mask=obs.action_mask[0],
-        global_state=obs.global_state[0],
-        step_count=obs.step_count[0],
-    )
+    # Initialise observation: Select only obs for a single agent.
+    init_x = env.observation_spec().generate_value()
+    init_x = jax.tree_util.tree_map(lambda x: x[0], init_x)
     init_x = jax.tree_util.tree_map(lambda x: x[None, ...], init_x)
 
     # Initialise actor params and optimiser state.
@@ -455,19 +501,8 @@ def run_experiment(_config: Dict) -> None:
     config = copy.deepcopy(_config)
     log = logger_setup(config)
 
-    # Create envs
-    generator = RandomGenerator(**config["env"]["scenario"]["task_config"])
-    env = jumanji.make(config["env"]["env_name"], generator=generator)
-    env = GlobalStateWrapper(RwareWrapper(env))
-    # Add agent id to observation.
-    if config["system"]["add_agent_id"]:
-        env = AgentIDWrapper(env=env, has_global_state=True)
-    env = AutoResetWrapper(env)
-    env = LogWrapper(env)
-    eval_env = jumanji.make(config["env"]["env_name"], generator=generator)
-    eval_env = GlobalStateWrapper(RwareWrapper(eval_env))
-    if config["system"]["add_agent_id"]:
-        eval_env = AgentIDWrapper(env=eval_env, has_global_state=True)
+    # Create the enviroments for train and eval.
+    env, eval_env = make(config=config)
 
     # PRNG keys.
     rng, rng_e, rng_p = jax.random.split(jax.random.PRNGKey(config["system"]["seed"]), num=3)
@@ -487,6 +522,7 @@ def run_experiment(_config: Dict) -> None:
     # Calculate total timesteps.
     n_devices = len(jax.devices())
     config["arch"]["devices"] = jax.devices()
+
     config["system"]["num_updates_per_eval"] = (
         config["system"]["num_updates"] // config["arch"]["num_evaluation"]
     )
@@ -534,6 +570,7 @@ def run_experiment(_config: Dict) -> None:
     for i in range(config["arch"]["num_evaluation"]):
         # Train.
         start_time = time.time()
+
         learner_output = learn(learner_state)
         jax.block_until_ready(learner_output)
 
@@ -604,7 +641,7 @@ def run_experiment(_config: Dict) -> None:
         )
 
 
-@hydra.main(config_path="../configs", config_name="default_ff_mappo.yaml", version_base="1.2")
+@hydra.main(config_path="../configs", config_name="default_ff_ippo.yaml", version_base="1.2")
 def hydra_entry_point(cfg: DictConfig) -> None:
     """Experiment entry point."""
     # Convert config to python dict.
@@ -613,7 +650,7 @@ def hydra_entry_point(cfg: DictConfig) -> None:
     # Run experiment.
     run_experiment(cfg)
 
-    print(f"{Fore.CYAN}{Style.BRIGHT}MAPPO experiment completed{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{Style.BRIGHT}IPPO experiment completed{Style.RESET_ALL}")
 
 
 if __name__ == "__main__":
