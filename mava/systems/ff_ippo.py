@@ -14,20 +14,16 @@
 
 import copy
 import time
-from typing import Any, Dict, Sequence, Tuple
+from typing import Any, Dict, Tuple
 
 import chex
-import distrax
-import flax.linen as nn
 import hydra
 import jax
 import jax.numpy as jnp
-import numpy as np
 import optax
 from colorama import Fore, Style
 from flax import jax_utils
 from flax.core.frozen_dict import FrozenDict
-from flax.linen.initializers import constant, orthogonal
 from jumanji.env import Environment
 from omegaconf import DictConfig, OmegaConf
 from optax._src.base import OptState
@@ -41,7 +37,6 @@ from mava.types import (
     ExperimentOutput,
     LearnerFn,
     LearnerState,
-    Observation,
     OptStates,
     Params,
     PPOTransition,
@@ -49,58 +44,8 @@ from mava.types import (
 from mava.utils.checkpointing import Checkpointer
 from mava.utils.jax import merge_leading_dims
 from mava.utils.make_env import make
-
-
-class Actor(nn.Module):
-    """Actor Network."""
-
-    action_dim: Sequence[int]
-
-    @nn.compact
-    def __call__(self, observation: Observation) -> distrax.Categorical:
-        """Forward pass."""
-        x = observation.agents_view
-
-        actor_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
-        actor_output = nn.relu(actor_output)
-        actor_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
-            actor_output
-        )
-        actor_output = nn.relu(actor_output)
-        actor_output = nn.Dense(
-            self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
-        )(actor_output)
-
-        masked_logits = jnp.where(
-            observation.action_mask,
-            actor_output,
-            jnp.finfo(jnp.float32).min,
-        )
-        actor_policy = distrax.Categorical(logits=masked_logits)
-
-        return actor_policy
-
-
-class Critic(nn.Module):
-    """Critic Network."""
-
-    @nn.compact
-    def __call__(self, observation: Observation) -> chex.Array:
-        """Forward pass."""
-
-        critic_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
-            observation.agents_view
-        )
-        critic_output = nn.relu(critic_output)
-        critic_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
-            critic_output
-        )
-        critic_output = nn.relu(critic_output)
-        critic_output = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(
-            critic_output
-        )
-
-        return jnp.squeeze(critic_output, axis=-1)
+from mava.utils.networks import FFActor as Actor
+from mava.utils.networks import FFCritic as Critic
 
 
 def get_learner_fn(
