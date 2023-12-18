@@ -170,7 +170,13 @@ def get_learner_fn(
             }
 
             transition = PPOTransition(
-                done, action, value, timestep.reward, log_prob, last_timestep.observation, info
+                done,
+                action,
+                value,
+                timestep.reward,
+                log_prob,
+                last_timestep.observation,
+                info,
             )
 
             learner_state = LearnerState(params, opt_states, rng, env_state, timestep)
@@ -278,13 +284,19 @@ def get_learner_fn(
                 # CALCULATE ACTOR LOSS
                 actor_grad_fn = jax.value_and_grad(_actor_loss_fn, has_aux=True)
                 actor_loss_info, actor_grads = actor_grad_fn(
-                    params.actor_params, opt_states.actor_opt_state, traj_batch, advantages
+                    params.actor_params,
+                    opt_states.actor_opt_state,
+                    traj_batch,
+                    advantages,
                 )
 
                 # CALCULATE CRITIC LOSS
                 critic_grad_fn = jax.value_and_grad(_critic_loss_fn, has_aux=True)
                 critic_loss_info, critic_grads = critic_grad_fn(
-                    params.critic_params, opt_states.critic_opt_state, traj_batch, targets
+                    params.critic_params,
+                    opt_states.critic_opt_state,
+                    traj_batch,
+                    targets,
                 )
 
                 # Compute the parallel mean (pmean) over the batch.
@@ -394,7 +406,10 @@ def get_learner_fn(
         batched_update_step = jax.vmap(_update_step, in_axes=(0, None), axis_name="batch")
 
         learner_state, (metric, loss_info, traj_batch) = jax.lax.scan(
-            batched_update_step, learner_state, None, config["system"]["num_updates_per_eval"]
+            batched_update_step,
+            learner_state,
+            None,
+            config["system"]["num_updates_per_eval"],
         )
         total_loss, (value_loss, loss_actor, entropy) = loss_info
         return (
@@ -474,9 +489,8 @@ def learner_setup(
     learn = jax.pmap(learn, axis_name="device")
 
     # Broadcast params and optimiser state to cores and batch.
-    broadcast = lambda x: jnp.broadcast_to(
-        x, (n_devices, config["system"]["update_batch_size"]) + x.shape
-    )
+    def broadcast(x: chex.Array) -> chex.Array:
+        return jnp.broadcast_to(x, (n_devices, config["system"]["update_batch_size"]) + x.shape)
 
     actor_params = jax.tree_map(broadcast, actor_params)
     actor_opt_state = jax.tree_map(broadcast, actor_opt_state)
@@ -485,7 +499,8 @@ def learner_setup(
 
     # Initialise environment states and timesteps.
     rng, *env_rngs = jax.random.split(
-        rng, n_devices * config["system"]["update_batch_size"] * config["arch"]["num_envs"] + 1
+        rng,
+        n_devices * config["system"]["update_batch_size"] * config["arch"]["num_envs"] + 1,
     )
     env_states, timesteps = jax.vmap(env.reset, in_axes=(0))(
         jnp.stack(env_rngs),
@@ -495,13 +510,21 @@ def learner_setup(
     rng, *step_rngs = jax.random.split(rng, n_devices * config["system"]["update_batch_size"] + 1)
 
     # Add dimension to pmap over.
-    reshape_step_rngs = lambda x: x.reshape(
-        (n_devices, config["system"]["update_batch_size"]) + x.shape[1:]
-    )
+    def reshape_step_rngs(x: chex.Array) -> chex.Array:
+        return x.reshape((n_devices, config["system"]["update_batch_size"]) + x.shape[1:])
+
     step_rngs = reshape_step_rngs(jnp.stack(step_rngs))
-    reshape_states = lambda x: x.reshape(
-        (n_devices, config["system"]["update_batch_size"], config["arch"]["num_envs"]) + x.shape[1:]
-    )
+
+    def reshape_states(x: chex.Array) -> chex.Array:
+        return x.reshape(
+            (
+                n_devices,
+                config["system"]["update_batch_size"],
+                config["arch"]["num_envs"],
+            )
+            + x.shape[1:]
+        )
+
     env_states = jax.tree_util.tree_map(reshape_states, env_states)
     timesteps = jax.tree_util.tree_map(reshape_states, timesteps)
 
