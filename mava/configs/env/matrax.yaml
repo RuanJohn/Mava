@@ -1,0 +1,6 @@
+# ---Environment Configs---
+defaults:
+  - _self_
+  - scenario: climbing-stateless
+
+env_name: Matrax
