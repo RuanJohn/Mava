@@ -20,14 +20,11 @@ import chex
 import hydra
 import jax
 import jax.numpy as jnp
-import jumanji
 import optax
 from colorama import Fore, Style
 from flax import jax_utils
 from flax.core.frozen_dict import FrozenDict
 from jumanji.env import Environment
-from jumanji.environments.routing.robot_warehouse.generator import RandomGenerator
-from jumanji.wrappers import AutoResetWrapper
 from omegaconf import DictConfig, OmegaConf
 from optax._src.base import OptState
 from rich.pretty import pprint
@@ -46,13 +43,13 @@ from mava.types import (
 )
 from mava.utils.checkpointing import Checkpointer
 from mava.utils.jax import merge_leading_dims
+from mava.utils.make_env import make
 from mava.utils.networks import FFCentralActor as Actor
 from mava.utils.networks import FFCritic as Critic
-from mava.wrappers.shared import CentralControllerWrapper, LogWrapper
 
 
 def get_learner_fn(
-    env: jumanji.Environment,
+    env: Environment,
     apply_fns: Tuple[ActorApply, CriticApply],
     update_fns: Tuple[optax.TransformUpdateFn, optax.TransformUpdateFn],
     config: Dict,
@@ -453,14 +450,8 @@ def run_experiment(_config: Dict) -> None:
     config = copy.deepcopy(_config)
     log = logger_setup(config)
 
-    # Create envs
-    generator = RandomGenerator(**config["env"]["scenario"]["task_config"])
-    env = jumanji.make(config["env"]["env_name"], generator=generator)
-    env = CentralControllerWrapper(env)
-    env = AutoResetWrapper(env)
-    env = LogWrapper(env)
-    eval_env = jumanji.make(config["env"]["env_name"], generator=generator)
-    eval_env = CentralControllerWrapper(eval_env)
+    # Create the enviroments for train and eval.
+    env, eval_env = make(config=config)
 
     # PRNG keys.
     rng, rng_e, rng_p = jax.random.split(jax.random.PRNGKey(config["system"]["seed"]), num=3)
@@ -599,7 +590,11 @@ def run_experiment(_config: Dict) -> None:
         )
 
 
-@hydra.main(config_path="../configs", config_name="default_ff_ippo.yaml", version_base="1.2")
+@hydra.main(
+    config_path="../configs",
+    config_name="default_ff_ppo_central.yaml",
+    version_base="1.2",
+)
 def hydra_entry_point(cfg: DictConfig) -> None:
     """Experiment entry point."""
     # Convert config to python dict.

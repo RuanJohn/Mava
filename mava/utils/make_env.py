@@ -16,6 +16,7 @@ from typing import Dict, Tuple
 
 import jaxmarl
 import jumanji
+import matrax
 from jaxmarl.environments.smax import map_name_to_scenario
 from jumanji.env import Environment
 from jumanji.environments.routing.lbf.generator import (
@@ -28,12 +29,22 @@ from jumanji.wrappers import AutoResetWrapper
 
 from mava.wrappers.jaxmarl import JaxMarlWrapper
 from mava.wrappers.jumanji import LbfWrapper, RwareWrapper
-from mava.wrappers.shared import AgentIDWrapper, GlobalStateWrapper, LogWrapper
+from mava.wrappers.matrax import MatraxWrapper
+from mava.wrappers.shared import (
+    AgentIDWrapper,
+    CentralControllerWrapper,
+    GlobalStateWrapper,
+    LogWrapper,
+)
 
 # Registry mapping environment names to their generator and wrapper classes.
 _jumanji_registry = {
     "RobotWarehouse-v0": {"generator": RwareRandomGenerator, "wrapper": RwareWrapper},
     "LevelBasedForaging-v0": {"generator": LbfRandomGenerator, "wrapper": LbfWrapper},
+}
+
+_matrax_registry = {
+    "Matrax": {"wrapper": MatraxWrapper},
 }
 
 
@@ -45,6 +56,12 @@ def add_optional_wrappers(env: Environment, config: Dict) -> Environment:
     # Add the global state to observation.
     if config["system"]["add_global_state"]:
         env = GlobalStateWrapper(env)
+
+    # TODO: Set this in the config in a better way
+    if config["system"]["central_controller"]:
+        if config["system"]["add_agent_id"] or config["system"]["add_global_state"]:
+            raise ValueError("Central controller cannot be used with agent id or global state.")
+        env = CentralControllerWrapper(env)
 
     return env
 
@@ -109,6 +126,36 @@ def make_jaxmarl_env(env_name: str, config: Dict) -> Tuple[Environment, Environm
     return env, eval_env
 
 
+def make_matrax_env(env_name: str, config: Dict) -> Tuple[Environment, Environment]:
+    """
+     Create a Matrax environment.
+
+    Args:
+        env_name (str): The name of the environment to create.
+        config (Dict): The configuration of the environment.
+
+    Returns:
+        A Matrax environment.
+    """
+
+    task_name = config["env"]["scenario"]["task_name"]
+    wrapper = _matrax_registry[env_name]["wrapper"]
+
+    # Create envs.
+    env = matrax.make(task_name)
+    env = wrapper(env)
+    eval_env = matrax.make(task_name)
+    eval_env = wrapper(eval_env)
+
+    env = add_optional_wrappers(env, config)
+    eval_env = add_optional_wrappers(eval_env, config)
+
+    env = AutoResetWrapper(env)
+    env = LogWrapper(env)
+
+    return env, eval_env
+
+
 def make(config: Dict) -> Tuple[Environment, Environment]:
     """
     Create environments for training and evaluation..
@@ -125,5 +172,7 @@ def make(config: Dict) -> Tuple[Environment, Environment]:
         return make_jumanji_env(env_name, config)
     elif env_name in jaxmarl.registered_envs:
         return make_jaxmarl_env(env_name, config)
+    elif env_name in _matrax_registry:
+        return make_matrax_env(env_name, config)
     else:
         raise ValueError(f"{env_name} is not a supported environment.")

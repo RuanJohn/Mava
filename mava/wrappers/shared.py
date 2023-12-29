@@ -212,6 +212,8 @@ class CentralControllerWrapper(Wrapper):
             joint_action_mask=joint_action_mask_,
             step_count=timestep.observation.step_count,
         )
+        joint_reward = jnp.mean(timestep.reward)
+        timestep = timestep.replace(reward=joint_reward)
         return state, timestep
 
     def step(self, state: State, action: chex.Array) -> Tuple[State, TimeStep]:
@@ -228,12 +230,16 @@ class CentralControllerWrapper(Wrapper):
             joint_action_mask=joint_action_mask_,
             step_count=timestep.observation.step_count,
         )
+        joint_reward = jnp.mean(timestep.reward)
+        timestep = timestep.replace(reward=joint_reward)
         return state, timestep
 
     def observation_spec(self) -> specs.Spec[Observation]:
         """Specification of the observation of the `RobotWarehouse` environment."""
         agents_view = specs.Array(
-            (self._env.num_agents * self._env.num_obs_features,), jnp.int32, "agents_view"
+            (self._env.num_agents * self._env.num_obs_features,),
+            jnp.int32,
+            "agents_view",
         )
         joint_action_mask_ = specs.BoundedArray(
             (self.num_actions**self._env.num_agents,), bool, False, True, "action_mask"

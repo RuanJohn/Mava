@@ -1,12 +1,12 @@
-# --- Defaults REC-IPPO ---
+# --- Defaults FF-IPPO ---
 
-num_updates: 1000 # Number of updates
+num_updates: 2000 # Number of updates
 seed: 42
 
 # --- Agent observations ---
-add_agent_id: True
+add_agent_id: False
 add_global_state: False
-central_controller: False
+central_controller: True
 
 # --- RL hyperparameters ---
 actor_lr: 2.5e-4 # Learning rate for actor network
