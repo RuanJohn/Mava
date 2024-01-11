@@ -1,0 +1,13 @@
+network_type: recurrent
+
+pre_torso_kwargs:
+  torso_type: mlp
+  layer_sizes: [128, 128]
+  use_layer_norm: False
+  activation: relu
+
+post_torso_kwargs:
+  torso_type: mlp
+  layer_sizes: [128, 128]
+  use_layer_norm: False
+  activation: relu

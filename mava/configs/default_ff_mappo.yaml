@@ -3,3 +3,4 @@ defaults:
   - arch: anakin
   - system: ff_mappo
   - env: rware
+  - network: feedforward

@@ -3,3 +3,4 @@ defaults:
   - arch: anakin
   - system: rec_ippo
   - env: rware
+  - network: recurrent

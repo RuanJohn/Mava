@@ -3,3 +3,4 @@ defaults:
   - arch: anakin
   - system: ff_ippo
   - env: rware
+  - network: feedforward

@@ -45,6 +45,7 @@ from mava.types import (
 )
 from mava.utils.checkpointing import Checkpointer
 from mava.utils.make_env import make
+from mava.utils.make_networks import make_network_torsos
 from mava.utils.networks import RecActor as Actor
 from mava.utils.networks import RecCentralisedCritic as Critic
 from mava.utils.networks import ScannedRNN
@@ -481,8 +482,9 @@ def learner_setup(
     rng, rng_p = rngs
 
     # Define network and optimiser.
-    actor_network = Actor(config["system"]["num_actions"])
-    critic_network = Critic()
+    pre_torso, post_torso = make_network_torsos(config["network"])
+    actor_network = Actor(config["system"]["num_actions"], pre_torso, post_torso)
+    critic_network = Critic(pre_torso, post_torso)
     actor_optim = optax.chain(
         optax.clip_by_global_norm(config["system"]["max_grad_norm"]),
         optax.adam(config["system"]["actor_lr"], eps=1e-5),

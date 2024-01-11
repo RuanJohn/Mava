@@ -226,18 +226,14 @@ class FFCentralActor(nn.Module):
     """Actor Network."""
 
     action_dim: Sequence[int]
+    torso: MLPTorso = MLPTorso()
 
     @nn.compact
     def __call__(self, observation: ObservationCentralController) -> distrax.Categorical:
         """Forward pass."""
         x = observation.agents_view
 
-        actor_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
-        actor_output = nn.relu(actor_output)
-        actor_output = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
-            actor_output
-        )
-        actor_output = nn.relu(actor_output)
+        actor_output = self.torso(x)
         actor_output = nn.Dense(
             self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(actor_output)
