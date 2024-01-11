@@ -373,8 +373,17 @@ def learner_setup(
     # PRNG keys.
     rng, rng_p = rngs
 
+    # Initialise observation: Select only obs for a single agent.
+    init_x = env.observation_spec().generate_value()
+    agent_obs_dim = init_x.agents_view.shape[1]
+    init_x = jax.tree_util.tree_map(lambda x: x[0], init_x)
+    init_x = jax.tree_util.tree_map(lambda x: x[None, ...], init_x)
+
     # Define network and optimiser.
-    # Sharing the same network torso at the moment.
+    # If the network is a transformer, set the key size to the agent observation dim.
+    if config["network"]["network_type"] == "transformer":
+        config["network"]["pre_torso_kwargs"]["key_size"] = agent_obs_dim
+    # Sharing the same torso across actor and critic.
     torso = make_network_torsos(config["network"])
     actor_network = Actor(config["system"]["num_actions"], torso)
     critic_network = Critic(torso)
@@ -386,11 +395,6 @@ def learner_setup(
         optax.clip_by_global_norm(config["system"]["max_grad_norm"]),
         optax.adam(config["system"]["critic_lr"], eps=1e-5),
     )
-
-    # Initialise observation: Select only obs for a single agent.
-    init_x = env.observation_spec().generate_value()
-    init_x = jax.tree_util.tree_map(lambda x: x[0], init_x)
-    init_x = jax.tree_util.tree_map(lambda x: x[None, ...], init_x)
 
     # Initialise actor params and optimiser state.
     actor_params = actor_network.init(rng_p, init_x)

@@ -14,7 +14,7 @@
 
 from typing import Sequence, Tuple, Union
 
-from mava.utils.networks import MLPTorso
+from mava.utils.networks import MLPTorso, TransformerTorso
 
 
 def _make_mlp_torso(
@@ -41,6 +41,20 @@ def _make_mlp_torso(
         raise ValueError(f"Unsupported torso type: {torso_type}")
 
 
+def _make_transformer_torso(
+    num_blocks: int,
+    num_heads: int,
+    mlp_units: Sequence[int],
+    key_size: int,
+) -> TransformerTorso:
+    return TransformerTorso(
+        num_blocks=num_blocks,
+        num_heads=num_heads,
+        mlp_units=mlp_units,
+        key_size=key_size,
+    )
+
+
 def make_network_torsos(
     network_config: dict,
 ) -> Union[MLPTorso, Tuple[MLPTorso, MLPTorso]]:
@@ -53,6 +67,9 @@ def make_network_torsos(
             _make_mlp_torso(**network_config["pre_torso_kwargs"]),
             _make_mlp_torso(**network_config["post_torso_kwargs"]),
         )
+
+    elif network_config["network_type"] == "transformer":
+        return _make_transformer_torso(**network_config["pre_torso_kwargs"])
 
     else:
         raise ValueError(f"Unsupported network type: {network_config['network_type']}")

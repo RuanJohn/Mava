@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import functools
-from typing import Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
 import chex
 import distrax
@@ -89,6 +89,119 @@ class MLPTorso(nn.Module):
             x = self.activation_fn(x)
 
         return x
+
+
+class TransformerBlock(nn.Module):
+    num_heads: int
+    key_size: int
+    mlp_units: Sequence[int]
+    w_init_scale: float
+    name: Optional[str] = None
+    """Initialises the transformer block module.
+
+    Args:
+        num_heads: number of independent attention heads (H).
+        key_size: the size of keys (K) and queries (Q) used in the attention mechanism.
+        mlp_units: sequence of MLP layers in the feedforward networks following self-attention.
+        w_init_scale: scale to `VarianceScaling` weight initializer.
+        model_size: optional size of the output embedding (D'). If None, defaults
+            to the key size multiplied by the number of heads (K * H).
+        name: optional name for this module.
+    """
+
+    def setup(self) -> None:
+        self.w_init = nn.initializers.variance_scaling(
+            self.w_init_scale, "fan_in", "truncated_normal"
+        )
+        self.model_size = self.key_size * self.num_heads
+
+    @nn.compact
+    def __call__(
+        self,
+        query: chex.Array,
+        key: chex.Array,
+        value: Optional[chex.Array] = None,
+        mask: Optional[chex.Array] = None,
+    ) -> chex.Array:
+        """Computes in this order:
+            - (optionally masked) MHA with queries, keys & values
+            - skip connection
+            - layer norm
+            - MLP
+            - skip connection
+            - layer norm
+
+        This module broadcasts over zero or more 'batch-like' leading dimensions.
+
+        Args:
+            query: embeddings sequence used to compute queries; shape [..., T', D_q].
+            key: embeddings sequence used to compute keys; shape [..., T, D_k].
+            value: embeddings sequence used to compute values; shape [..., T, D_v].
+            mask: optional mask applied to attention weights; shape [..., H=1, T', T].
+
+        Returns:
+            A new sequence of embeddings, consisting of a projection of the
+                attention-weighted value projections; shape [..., T', D'].
+        """
+
+        # Multi-head attention and residual connection
+        mha = nn.MultiHeadDotProductAttention(
+            num_heads=self.num_heads,
+            kernel_init=self.w_init,
+            out_features=self.model_size,
+        )
+        h = mha(inputs_q=query, inputs_kv=key) + query
+        h = nn.LayerNorm(use_scale=True, use_bias=True)(h)
+
+        # MLP and residual connection
+        for mlp_layer in self.mlp_units:
+            out = nn.Dense(mlp_layer)(h)
+            out = nn.relu(out)
+        out = nn.Dense(self.model_size)(h)
+        out = nn.relu(out) + h
+        out = nn.LayerNorm(use_scale=True, use_bias=True)(out)
+
+        return out
+
+
+class TransformerTorso(nn.Module):
+    num_blocks: int
+    num_heads: int
+    key_size: int
+    mlp_units: Sequence[int]
+    name: Optional[str] = None
+
+    def setup(self) -> None:
+        self.model_size = self.num_heads * self.key_size
+
+    @nn.compact
+    def __call__(self, observation: chex.Array) -> chex.Array:
+        # Shape names:
+        # B: batch size
+        # O: observation size
+        # H: hidden/embedding size
+        # (B, O)
+        # (B, O + 1) -> (B, H)
+        embeddings = nn.Dense(self.model_size)(observation)
+
+        # (B, H) -> (B, H)
+        for block_id in range(self.num_blocks):
+            transformer_block = TransformerBlock(
+                num_heads=self.num_heads,
+                key_size=self.key_size,
+                mlp_units=self.mlp_units,
+                w_init_scale=2 / self.num_blocks,
+                name=f"self_attention_block_{block_id}",
+            )
+            embeddings = transformer_block(query=embeddings, key=embeddings)
+
+        x = nn.Dense(
+            self.model_size,
+            kernel_init=orthogonal(np.sqrt(2)),
+            bias_init=constant(0.0),
+        )(embeddings)
+        x = nn.relu(x)
+        return x  # (B, H)
 
 
 class RecActor(nn.Module):

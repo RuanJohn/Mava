@@ -1,0 +1,7 @@
+network_type: transformer
+
+pre_torso_kwargs:
+  num_blocks: 1
+  num_heads: 1
+  key_size: ~ # this is a runtime argument based on the obs size
+  mlp_units: [128]
