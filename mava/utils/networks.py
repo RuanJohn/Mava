@@ -96,6 +96,7 @@ class TransformerBlock(nn.Module):
     key_size: int
     mlp_units: Sequence[int]
     w_init_scale: float
+    split_over_heads: bool
     name: Optional[str] = None
     """Initialises the transformer block module.
 
@@ -104,8 +105,7 @@ class TransformerBlock(nn.Module):
         key_size: the size of keys (K) and queries (Q) used in the attention mechanism.
         mlp_units: sequence of MLP layers in the feedforward networks following self-attention.
         w_init_scale: scale to `VarianceScaling` weight initializer.
-        model_size: optional size of the output embedding (D'). If None, defaults
-            to the key size multiplied by the number of heads (K * H).
+        split_over_heads: whether to split keys, queries and values over heads.
         name: optional name for this module.
     """
 
@@ -113,7 +113,12 @@ class TransformerBlock(nn.Module):
         self.w_init = nn.initializers.variance_scaling(
             self.w_init_scale, "fan_in", "truncated_normal"
         )
-        self.model_size = self.key_size * self.num_heads
+        if self.split_over_heads:
+            if self.key_size % self.num_heads != 0:
+                raise ValueError("Key size must be divisible by number of heads")
+            self.model_size = self.key_size
+        else:
+            self.model_size = self.key_size * self.num_heads
 
     @nn.compact
     def __call__(
@@ -169,10 +174,16 @@ class TransformerTorso(nn.Module):
     num_heads: int
     key_size: int
     mlp_units: Sequence[int]
+    split_over_heads: bool
     name: Optional[str] = None
 
     def setup(self) -> None:
-        self.model_size = self.num_heads * self.key_size
+        if self.split_over_heads:
+            if self.key_size % self.num_heads != 0:
+                raise ValueError("Key size must be divisible by number of heads")
+            self.model_size = self.key_size
+        else:
+            self.model_size = self.key_size * self.num_heads
 
     @nn.compact
     def __call__(self, observation: chex.Array) -> chex.Array:
@@ -191,6 +202,7 @@ class TransformerTorso(nn.Module):
                 key_size=self.key_size,
                 mlp_units=self.mlp_units,
                 w_init_scale=2 / self.num_blocks,
+                split_over_heads=self.split_over_heads,
                 name=f"self_attention_block_{block_id}",
             )
             embeddings = transformer_block(query=embeddings, key=embeddings)

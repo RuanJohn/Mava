@@ -42,16 +42,14 @@ def _make_mlp_torso(
 
 
 def _make_transformer_torso(
-    num_blocks: int,
-    num_heads: int,
-    mlp_units: Sequence[int],
-    key_size: int,
+    num_blocks: int, num_heads: int, mlp_units: Sequence[int], key_size: int, split_over_heads: bool
 ) -> TransformerTorso:
     return TransformerTorso(
         num_blocks=num_blocks,
         num_heads=num_heads,
         mlp_units=mlp_units,
         key_size=key_size,
+        split_over_heads=split_over_heads,
     )
 
 
