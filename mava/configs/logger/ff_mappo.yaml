@@ -5,4 +5,4 @@ system_name: ff_mappo
 
 # --- Other logger kwargs ---
 kwargs:
-  neptune_tag: [ff-mappo, rware]
+  neptune_tag: [ff-mappo, ff-central-controller]
