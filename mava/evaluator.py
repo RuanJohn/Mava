@@ -284,20 +284,22 @@ def evaluator_setup(
             10,
         )
     else:
-        # TODO(Ruan): Set with if statements instead for easy comparisons.
-        # vmapped_eval_network_apply_fn = jax.vmap(
-        #     network.apply,
-        #     in_axes=(None, 0),
-        # )
-        vmapped_eval_network_apply_fn = network.apply
+
+        if config["system"]["central_controller"]:
+            network_apply_fn = network.apply
+        else:
+            network_apply_fn = jax.vmap(
+                network.apply,
+                in_axes=(None, 0),
+            )
         evaluator = get_ff_evaluator_fn(
             eval_env,
-            vmapped_eval_network_apply_fn,
+            network_apply_fn,
             config,
         )
         absolute_metric_evaluator = get_ff_evaluator_fn(
             eval_env,
-            vmapped_eval_network_apply_fn,
+            network_apply_fn,
             config,
             10,
         )
