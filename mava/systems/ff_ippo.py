@@ -542,7 +542,12 @@ def run_experiment(_config: Dict) -> None:
 
     # Run experiment for a total number of evaluations.
     max_episode_return = jnp.float32(0.0)
-    best_params = None
+    # Initialise best params to current actor params
+    initial_actor_params = jax.tree_util.tree_map(
+        lambda x: x[:, 0, ...],
+        learner_state.params.actor_params,  # Select only actor params
+    )
+    best_params = copy.deepcopy(initial_actor_params)
     for i in range(config["arch"]["num_evaluation"]):
         # Train.
         start_time = time.time()
