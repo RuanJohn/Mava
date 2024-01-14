@@ -98,6 +98,7 @@ class JaxMarlState:
 
 
 RNNObservation: TypeAlias = Tuple[Observation, Done]
+RNNCentralControllerObservation: TypeAlias = Tuple[ObservationCentralController, Done]
 RNNGlobalObservation: TypeAlias = Tuple[ObservationGlobalState, Done]
 
 

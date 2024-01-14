@@ -1,0 +1,6 @@
+defaults:
+  - logger: rec_ppo_central
+  - arch: anakin
+  - system: rec_ppo_central
+  - env: rware
+  - network: recurrent

@@ -26,6 +26,7 @@ from flax.linen.initializers import constant, orthogonal
 from mava.types import (
     Observation,
     ObservationCentralController,
+    RNNCentralControllerObservation,
     RNNGlobalObservation,
     RNNObservation,
 )
@@ -371,3 +372,40 @@ class FFCentralActor(nn.Module):
         actor_policy = distrax.Categorical(logits=masked_logits)
 
         return actor_policy
+
+
+class RecCentralActor(nn.Module):
+    """Actor Network."""
+
+    action_dim: Sequence[int]
+    # TODO: The hidden size should depend on the pre-torso layer size.
+    pre_torso: MLPTorso = MLPTorso(layer_sizes=(128,))
+    post_torso: MLPTorso = MLPTorso(layer_sizes=(128,))
+
+    @nn.compact
+    def __call__(
+        self,
+        policy_hidden_state: chex.Array,
+        observation_done: RNNCentralControllerObservation,
+    ) -> Tuple[chex.Array, distrax.Categorical]:
+        """Forward pass."""
+        observation, done = observation_done
+
+        policy_embedding = self.pre_torso(observation.agents_view)
+        policy_rnn_in = (policy_embedding, done)
+        policy_hidden_state, policy_embedding = ScannedRNN()(policy_hidden_state, policy_rnn_in)
+
+        actor_output = self.post_torso(policy_embedding)
+        actor_output = nn.Dense(
+            self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
+        )(actor_output)
+
+        masked_logits = jnp.where(
+            observation.joint_action_mask,
+            actor_output,
+            jnp.finfo(jnp.float32).min,
+        )
+
+        pi = distrax.Categorical(logits=masked_logits)
+
+        return policy_hidden_state, pi
