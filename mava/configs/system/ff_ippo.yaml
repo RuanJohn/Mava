@@ -4,7 +4,7 @@ num_updates: 250 # Number of updates
 seed: 42
 
 # --- Agent observations ---
-add_agent_id: True
+add_agent_id: False # Should be off for grid based envs.
 add_global_state: False
 central_controller: False
 

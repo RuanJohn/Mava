@@ -19,6 +19,9 @@ import jumanji
 import matrax
 from jaxmarl.environments.smax import map_name_to_scenario
 from jumanji.env import Environment
+from jumanji.environments.routing.connector.generator import (
+    RandomWalkGenerator as ConnectorGenerator,
+)
 from jumanji.environments.routing.lbf.generator import (
     RandomGenerator as LbfRandomGenerator,
 )
@@ -28,7 +31,7 @@ from jumanji.environments.routing.robot_warehouse.generator import (
 from jumanji.wrappers import AutoResetWrapper
 
 from mava.wrappers.jaxmarl import JaxMarlWrapper
-from mava.wrappers.jumanji import LbfWrapper, RwareWrapper
+from mava.wrappers.jumanji import LbfWrapper, MaConnectorWrapper, RwareWrapper
 from mava.wrappers.matrax import MatraxWrapper
 from mava.wrappers.shared import (
     AgentIDWrapper,
@@ -41,6 +44,7 @@ from mava.wrappers.shared import (
 _jumanji_registry = {
     "RobotWarehouse-v0": {"generator": RwareRandomGenerator, "wrapper": RwareWrapper},
     "LevelBasedForaging-v0": {"generator": LbfRandomGenerator, "wrapper": LbfWrapper},
+    "MaConnector-v2": {"generator": ConnectorGenerator, "wrapper": MaConnectorWrapper},
 }
 
 _matrax_registry = {

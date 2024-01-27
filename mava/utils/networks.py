@@ -92,6 +92,39 @@ class MLPTorso(nn.Module):
         return x
 
 
+class CNNTorso(nn.Module):
+    """CNN for processing grid-based environment observations."""
+
+    layer_sizes: Sequence[int] = (128, 128)
+    activation: str = "relu"
+    use_layer_norm: bool = False
+    conv_n_channels: int = 32
+
+    def setup(self) -> None:
+        if self.activation == "relu":
+            self.activation_fn = nn.relu
+        elif self.activation == "tanh":
+            self.activation_fn = nn.tanh
+        # Input will be (grid_size, grid_size)
+        # CNN should go from (grid_size, grid_size) -> (num_features)
+        self.cnn_block = nn.Sequential(
+            [
+                nn.Conv(features=self.conv_n_channels, kernel_size=(3, 3), padding="SAME"),
+                nn.relu,
+                nn.Conv(features=self.conv_n_channels, kernel_size=(3, 3), padding="SAME"),
+                nn.relu,
+            ]
+        )
+
+    def __call__(self, observation: chex.Array) -> chex.Array:
+        """Forward pass."""
+        x = observation  # (B, grid, grid)
+        x = self.cnn_block(x)  # (B, grid, num_features)
+        x = x.reshape((x.shape[0], -1))  # (B, grid * num_features)
+
+        return x
+
+
 class TransformerBlock(nn.Module):
     num_heads: int
     key_size: int

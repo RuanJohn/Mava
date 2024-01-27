@@ -1,0 +1,8 @@
+network_type: cnn
+
+pre_torso_kwargs:
+  torso_type: cnn
+  layer_sizes: [128, 128]
+  use_layer_norm: False
+  activation: relu
+  conv_n_channels: 32
