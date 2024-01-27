@@ -14,7 +14,7 @@
 
 from typing import Sequence, Tuple, Union
 
-from mava.utils.networks import MLPTorso, TransformerTorso
+from mava.utils.networks import CNNTorso, MLPTorso, TransformerTorso
 
 
 def _make_mlp_torso(
@@ -53,6 +53,22 @@ def _make_transformer_torso(
     )
 
 
+def _make_cnn_torso(
+    conv_n_channels: int,
+    activation: str,
+) -> CNNTorso:
+    """Creates a feedforward torso network.
+    Args:
+        torso_type (str): Type of torso to use. This could be MLP, CNN or Transformer.
+        conv_n_channels (int): Number of channels in the convolutional layers.
+    """
+
+    return CNNTorso(
+        conv_n_channels=conv_n_channels,
+        activation=activation,
+    )
+
+
 def make_network_torsos(
     network_config: dict,
 ) -> Union[MLPTorso, Tuple[MLPTorso, MLPTorso]]:
@@ -68,6 +84,9 @@ def make_network_torsos(
 
     elif network_config["network_type"] == "transformer":
         return _make_transformer_torso(**network_config["pre_torso_kwargs"])
+
+    elif network_config["network_type"] == "cnn":
+        return _make_cnn_torso(**network_config["pre_torso_kwargs"])
 
     else:
         raise ValueError(f"Unsupported network type: {network_config['network_type']}")

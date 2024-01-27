@@ -3,5 +3,5 @@ defaults:
   - arch: anakin
   - system: ff_ippo
   - env: ma_connector
-  - network: feedforward
+  - network: cnn
   - _self_

@@ -58,12 +58,19 @@ def get_ff_evaluator_fn(
 
             # Select action.
             rng, _rng = jax.random.split(rng)
-            pi = apply_fn(params, last_timestep.observation)
+            pi = apply_fn(
+                params,
+                jax.tree_util.tree_map(
+                    lambda x: jnp.expand_dims(x, axis=0), last_timestep.observation
+                ),
+            )
 
             if config["arch"]["evaluation_greedy"]:
                 action = pi.mode()
             else:
                 action = pi.sample(seed=_rng)
+
+            action = jnp.squeeze(action, axis=0)
 
             # Step environment.
             env_state, timestep = env.step(env_state, action)

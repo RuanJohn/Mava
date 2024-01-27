@@ -7,7 +7,7 @@ jax
 jaxlib
 jaxmarl
 jumanji @ git+https://github.com/RuanJohn/jumanji@feat/join-lbf-connector#egg=jumanji
-matrax @ git+https://github.com/instadeepai/matrax@fix/fix-conflict-stateful-init#egg=matrax
+matrax @ git+https://github.com/instadeepai/matrax#egg=matrax
 neptune
 numpy
 omegaconf

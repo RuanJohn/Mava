@@ -45,7 +45,6 @@ from mava.utils.checkpointing import Checkpointer
 from mava.utils.jax import merge_leading_dims
 from mava.utils.make_env import make
 from mava.utils.make_networks import make_network_torsos
-from mava.utils.networks import CNNTorso
 from mava.utils.networks import FFActor as Actor
 from mava.utils.networks import FFCritic as Critic
 
@@ -387,8 +386,6 @@ def learner_setup(
     # Sharing the same torso across actor and critic.
     torso = make_network_torsos(config["network"])
 
-    torso = CNNTorso()
-
     actor_network = Actor(config["system"]["num_actions"], torso)
     critic_network = Critic(torso)
     actor_optim = optax.chain(
@@ -580,29 +577,29 @@ def run_experiment(_config: Dict) -> None:
 
         # TODO add back evaluator for CNN.
         # Evaluate.
-        # evaluator_output = evaluator(trained_params, eval_rngs)
-        # jax.block_until_ready(evaluator_output)
+        evaluator_output = evaluator(trained_params, eval_rngs)
+        jax.block_until_ready(evaluator_output)
 
-        # # Log the results of the evaluation.
-        # elapsed_time = time.time() - start_time
-        # evaluator_output.episodes_info["steps_per_second"] = steps_per_rollout / elapsed_time
-        # episode_return = log(
-        #     metrics=evaluator_output,
-        #     t_env=steps_per_rollout * (i + 1),
-        #     eval_step=i,
-        # )
+        # Log the results of the evaluation.
+        elapsed_time = time.time() - start_time
+        evaluator_output.episodes_info["steps_per_second"] = steps_per_rollout / elapsed_time
+        episode_return = log(
+            metrics=evaluator_output,
+            t_env=steps_per_rollout * (i + 1),
+            eval_step=i,
+        )
 
-        # if save_checkpoint:
-        #     # Save checkpoint of learner state
-        #     checkpointer.save(
-        #         timestep=steps_per_rollout * (i + 1),
-        #         unreplicated_learner_state=jax_utils.unreplicate(learner_output.learner_state),
-        #         episode_return=episode_return,
-        #     )
+        if save_checkpoint:
+            # Save checkpoint of learner state
+            checkpointer.save(
+                timestep=steps_per_rollout * (i + 1),
+                unreplicated_learner_state=jax_utils.unreplicate(learner_output.learner_state),
+                episode_return=episode_return,
+            )
 
-        # if config["arch"]["absolute_metric"] and max_episode_return <= episode_return:
-        #     best_params = copy.deepcopy(trained_params)
-        #     max_episode_return = episode_return
+        if config["arch"]["absolute_metric"] and max_episode_return <= episode_return:
+            best_params = copy.deepcopy(trained_params)
+            max_episode_return = episode_return
 
         # Update runner state to continue training.
         learner_state = learner_output.learner_state

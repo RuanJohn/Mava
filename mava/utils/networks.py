@@ -95,10 +95,8 @@ class MLPTorso(nn.Module):
 class CNNTorso(nn.Module):
     """CNN for processing grid-based environment observations."""
 
-    layer_sizes: Sequence[int] = (128, 128)
-    activation: str = "relu"
-    use_layer_norm: bool = False
     conv_n_channels: int = 32
+    activation: str = "relu"
 
     def setup(self) -> None:
         if self.activation == "relu":
@@ -110,9 +108,9 @@ class CNNTorso(nn.Module):
         self.cnn_block = nn.Sequential(
             [
                 nn.Conv(features=self.conv_n_channels, kernel_size=(3, 3), padding="SAME"),
-                nn.relu,
+                self.activation_fn,
                 nn.Conv(features=self.conv_n_channels, kernel_size=(3, 3), padding="SAME"),
-                nn.relu,
+                self.activation_fn,
             ]
         )
 
