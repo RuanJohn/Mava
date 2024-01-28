@@ -53,6 +53,8 @@ def _make_transformer_torso(
 def _make_cnn_torso(
     conv_n_channels: int,
     activation: str,
+    max_timesteps: int,
+    should_concatenate_step_count: bool,
 ) -> CNNTorso:
     """Creates a feedforward torso network.
     Args:
@@ -63,6 +65,8 @@ def _make_cnn_torso(
     return CNNTorso(
         conv_n_channels=conv_n_channels,
         activation=activation,
+        max_timesteps=max_timesteps,
+        should_concatenate_step_count=should_concatenate_step_count,
     )
 
 

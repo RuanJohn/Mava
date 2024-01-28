@@ -390,6 +390,17 @@ def learner_setup(
             "key_size"
         ] = agent_obs_dim
 
+    # If the network is a cnn, set the max timestep.
+    if config["network"]["actor_network"]["pre_torso"]["network_type"] == "cnn":
+        config["network"]["actor_network"]["pre_torso"]["network_kwargs"][
+            "max_timesteps"
+        ] = env.time_limit
+
+    if config["network"]["critic_network"]["pre_torso"]["network_type"] == "cnn":
+        config["network"]["critic_network"]["pre_torso"]["network_kwargs"][
+            "max_timesteps"
+        ] = env.time_limit
+
     actor_torso, _, critic_torso, _ = make_network_torsos(
         config["network"]["actor_network"], config["network"]["critic_network"]
     )
@@ -583,7 +594,6 @@ def run_experiment(_config: Dict) -> None:
         eval_rngs = jnp.stack(eval_rngs)
         eval_rngs = eval_rngs.reshape(n_devices, -1)
 
-        # TODO add back evaluator for CNN.
         # Evaluate.
         evaluator_output = evaluator(trained_params, eval_rngs)
         jax.block_until_ready(evaluator_output)

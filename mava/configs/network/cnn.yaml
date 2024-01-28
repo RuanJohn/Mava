@@ -4,6 +4,8 @@ actor_network:
     network_kwargs:
       conv_n_channels: 32
       activation: relu
+      max_timesteps: 1
+      should_concatenate_step_count: True
   post_torso: ~
 
 critic_network:
@@ -12,4 +14,6 @@ critic_network:
     network_kwargs:
       conv_n_channels: 32
       activation: relu
+      max_timesteps: 1
+      should_concatenate_step_count: True
   post_torso: ~

@@ -77,7 +77,7 @@ class MLPTorso(nn.Module):
     @nn.compact
     def __call__(self, observation: chex.Array) -> chex.Array:
         """Forward pass."""
-        x = observation
+        x = observation.agents_view
 
         for layer_size in self.layer_sizes:
             x = nn.Dense(
@@ -92,17 +92,43 @@ class MLPTorso(nn.Module):
         return x
 
 
+def make_concatenate_step_count(
+    should_concatenate_step_count: bool,
+    max_timesteps: int,
+) -> nn.Module:
+    def normalize_step_count(step_count: chex.Array) -> chex.Array:
+        return step_count / max_timesteps
+
+    def concatenate_step_count(
+        observation: chex.Array,
+        step_count: chex.Array,
+    ) -> chex.Array:
+        if should_concatenate_step_count:
+            step_count = normalize_step_count(step_count)
+            return jnp.concatenate([observation, step_count], axis=-1)
+        else:
+            return observation
+
+    return concatenate_step_count
+
+
 class CNNTorso(nn.Module):
     """CNN for processing grid-based environment observations."""
 
     conv_n_channels: int = 32
     activation: str = "relu"
+    max_timesteps: int = 1
+    should_concatenate_step_count: bool = False
 
     def setup(self) -> None:
         if self.activation == "relu":
             self.activation_fn = nn.relu
         elif self.activation == "tanh":
             self.activation_fn = nn.tanh
+        self.normalize_step_count = make_concatenate_step_count(
+            should_concatenate_step_count=self.should_concatenate_step_count,
+            max_timesteps=self.max_timesteps,
+        )
         # Input will be (grid_size, grid_size)
         # CNN should go from (grid_size, grid_size) -> (num_features)
         self.cnn_block = nn.Sequential(
@@ -116,9 +142,11 @@ class CNNTorso(nn.Module):
 
     def __call__(self, observation: chex.Array) -> chex.Array:
         """Forward pass."""
-        x = observation  # (B, grid, grid)
+        x = observation.agents_view  # (B, grid, grid)
         x = self.cnn_block(x)  # (B, grid, num_features)
         x = x.reshape((x.shape[0], -1))  # (B, grid * num_features)
+
+        x = self.normalize_step_count(x, jnp.expand_dims(observation.step_count, axis=-1))
 
         return x
 
@@ -225,7 +253,7 @@ class TransformerTorso(nn.Module):
         # H: hidden/embedding size
         # (B, O)
         # (B, O + 1) -> (B, H)
-        embeddings = nn.Dense(self.model_size)(observation)
+        embeddings = nn.Dense(self.model_size)(observation.agents_view)
 
         # (B, H) -> (B, H)
         for block_id in range(self.num_blocks):
@@ -345,9 +373,9 @@ class FFActor(nn.Module):
     @nn.compact
     def __call__(self, observation: Observation) -> distrax.Categorical:
         """Forward pass."""
-        x = observation.agents_view
+        # x = observation.agents_view
 
-        actor_output = self.torso(x)
+        actor_output = self.torso(observation)
         actor_output = nn.Dense(
             self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(actor_output)
@@ -371,7 +399,7 @@ class FFCritic(nn.Module):
     def __call__(self, observation: Observation) -> chex.Array:
         """Forward pass."""
 
-        critic_output = self.torso(observation.agents_view)
+        critic_output = self.torso(observation)
         critic_output = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(
             critic_output
         )
@@ -388,9 +416,9 @@ class FFCentralActor(nn.Module):
     @nn.compact
     def __call__(self, observation: ObservationCentralController) -> distrax.Categorical:
         """Forward pass."""
-        x = observation.agents_view
+        # x = observation.agents_view
 
-        actor_output = self.torso(x)
+        actor_output = self.torso(observation)
         actor_output = nn.Dense(
             self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(actor_output)
