@@ -5,4 +5,4 @@ system_name: ff_ippo
 
 # --- Other logger kwargs ---
 kwargs:
-  neptune_tag: [ff-ippo, ff-central-controller]
+  neptune_tag: [ff-ippo, lbf-central-control-scale-agents]
