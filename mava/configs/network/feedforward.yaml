@@ -1,7 +1,17 @@
-network_type: feedforward
+actor_network:
+  pre_torso:
+    network_type: mlp
+    network_kwargs:
+      layer_sizes: [128, 128]
+      use_layer_norm: False
+      activation: relu
+  post_torso: ~
 
-pre_torso_kwargs:
-  torso_type: mlp
-  layer_sizes: [128, 128]
-  use_layer_norm: False
-  activation: relu
+critic_network:
+  pre_torso:
+    network_type: mlp
+    network_kwargs:
+      layer_sizes: [128, 128]
+      use_layer_norm: False
+      activation: relu
+  post_torso: ~

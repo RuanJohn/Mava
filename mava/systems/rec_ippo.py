@@ -486,10 +486,13 @@ def learner_setup(
     # PRNG keys.
     rng, rng_p = rngs
 
-    # Define network and optimisers.
-    pre_torso, post_torso = make_network_torsos(config["network"])
-    actor_network = Actor(config["system"]["num_actions"], pre_torso, post_torso)
-    critic_network = Critic(pre_torso, post_torso)
+    # Define network and optimiser.
+    actor_pre_torso, actor_post_torso, critic_pre_torso, critic_post_torso = make_network_torsos(
+        config["network"]["actor_network"], config["network"]["critic_network"]
+    )
+
+    actor_network = Actor(config["system"]["num_actions"], actor_pre_torso, actor_post_torso)
+    critic_network = Critic(critic_pre_torso, critic_post_torso)
     actor_optim = optax.chain(
         optax.clip_by_global_norm(config["system"]["max_grad_norm"]),
         optax.adam(config["system"]["actor_lr"], eps=1e-5),

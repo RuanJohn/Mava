@@ -1,5 +1,15 @@
-network_type: cnn
+actor_network:
+  pre_torso:
+    network_type: cnn
+    network_kwargs:
+      conv_n_channels: 32
+      activation: relu
+  post_torso: ~
 
-pre_torso_kwargs:
-  conv_n_channels: 32
-  activation: relu
+critic_network:
+  pre_torso:
+    network_type: cnn
+    network_kwargs:
+      conv_n_channels: 32
+      activation: relu
+  post_torso: ~

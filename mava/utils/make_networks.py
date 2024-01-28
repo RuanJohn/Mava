@@ -12,33 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
 from mava.utils.networks import CNNTorso, MLPTorso, TransformerTorso
 
+VALID_TORSOS = ["mlp", "transformer", "cnn"]
+
 
 def _make_mlp_torso(
-    torso_type: str,
     layer_sizes: Sequence[int],
     activation: str,
     use_layer_norm: bool,
 ) -> MLPTorso:
     """Creates a feedforward torso network.
     Args:
-        torso_type (str): Type of torso to use. This could be MLP, CNN or Transformer.
         layer_sizes (Sequence[int]): Size of each layer in the torso.
         activation (str): Activation function to use.
         use_layer_norm (bool): Whether to use layer norm.
     """
 
-    if torso_type == "mlp":
-        return MLPTorso(
-            layer_sizes=layer_sizes,
-            activation=activation,
-            use_layer_norm=use_layer_norm,
-        )
-    else:
-        raise ValueError(f"Unsupported torso type: {torso_type}")
+    return MLPTorso(
+        layer_sizes=layer_sizes,
+        activation=activation,
+        use_layer_norm=use_layer_norm,
+    )
 
 
 def _make_transformer_torso(
@@ -69,24 +66,44 @@ def _make_cnn_torso(
     )
 
 
-def make_network_torsos(
-    network_config: dict,
-) -> Union[MLPTorso, Tuple[MLPTorso, MLPTorso]]:
-    """Creates a torso network."""
-    if network_config["network_type"] == "feedforward":
-        return _make_mlp_torso(**network_config["pre_torso_kwargs"])
+def make_torso(
+    torso_config: dict,
+) -> Union[MLPTorso, CNNTorso, TransformerTorso]:
+    """Parses torso configuration."""
+    if torso_config["network_type"] == "mlp":
+        return _make_mlp_torso(**torso_config["network_kwargs"])
 
-    elif network_config["network_type"] == "recurrent":
-        return (
-            _make_mlp_torso(**network_config["pre_torso_kwargs"]),
-            _make_mlp_torso(**network_config["post_torso_kwargs"]),
-        )
+    elif torso_config["network_type"] == "transformer":
+        return _make_transformer_torso(**torso_config["network_kwargs"])
 
-    elif network_config["network_type"] == "transformer":
-        return _make_transformer_torso(**network_config["pre_torso_kwargs"])
-
-    elif network_config["network_type"] == "cnn":
-        return _make_cnn_torso(**network_config["pre_torso_kwargs"])
+    elif torso_config["network_type"] == "cnn":
+        return _make_cnn_torso(**torso_config["network_kwargs"])
 
     else:
-        raise ValueError(f"Unsupported network type: {network_config['network_type']}")
+        raise ValueError(f"Unsupported network type: {torso_config['network_type']}")
+
+
+def make_network_torsos(
+    actor_network_config: dict,
+    critic_network_config: dict,
+) -> Tuple[
+    Union[MLPTorso, CNNTorso, TransformerTorso],
+    Optional[Union[MLPTorso, CNNTorso, TransformerTorso]],
+    Union[MLPTorso, CNNTorso, TransformerTorso],
+    Optional[Union[MLPTorso, CNNTorso, TransformerTorso]],
+]:
+    """Creates torso networks."""
+    actor_pre_torso = make_torso(actor_network_config["pre_torso"])
+    actor_post_torso = (
+        make_torso(actor_network_config["post_torso"])
+        if actor_network_config["post_torso"] is not None
+        else None
+    )
+    critic_pre_torso = make_torso(critic_network_config["pre_torso"])
+    critic_post_torso = (
+        make_torso(critic_network_config["post_torso"])
+        if critic_network_config["post_torso"] is not None
+        else None
+    )
+
+    return actor_pre_torso, actor_post_torso, critic_pre_torso, critic_post_torso

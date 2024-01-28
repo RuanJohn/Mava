@@ -381,12 +381,21 @@ def learner_setup(
 
     # Define network and optimiser.
     # If the network is a transformer, set the key size to the agent observation dim.
-    if config["network"]["network_type"] == "transformer":
-        config["network"]["pre_torso_kwargs"]["key_size"] = agent_obs_dim
-    # Sharing the same torso across actor and critic.
-    torso = make_network_torsos(config["network"])
-    actor_network = Actor(config["system"]["num_actions"], torso)
-    critic_network = Critic(torso)
+    if config["network"]["actor_network"]["pre_torso"]["network_type"] == "transformer":
+        config["network"]["actor_network"]["pre_torso"]["network_kwargs"][
+            "key_size"
+        ] = agent_obs_dim
+    if config["network"]["critic_network"]["pre_torso"]["network_type"] == "transformer":
+        config["network"]["critic_network"]["pre_torso"]["network_kwargs"][
+            "key_size"
+        ] = agent_obs_dim
+
+    actor_torso, _, critic_torso, _ = make_network_torsos(
+        config["network"]["actor_network"], config["network"]["critic_network"]
+    )
+
+    actor_network = Actor(config["system"]["num_actions"], actor_torso)
+    critic_network = Critic(critic_torso)
     actor_optim = optax.chain(
         optax.clip_by_global_norm(config["system"]["max_grad_norm"]),
         optax.adam(config["system"]["actor_lr"], eps=1e-5),

@@ -373,9 +373,12 @@ def learner_setup(
     rng, rng_p = rngs
 
     # Define network and optimiser.
-    torso = make_network_torsos(config["network"])
-    actor_network = Actor(config["system"]["num_actions"], torso)
-    critic_network = Critic(torso)
+    actor_torso, _, critic_torso, _ = make_network_torsos(
+        config["network"]["actor_network"], config["network"]["critic_network"]
+    )
+
+    actor_network = Actor(config["system"]["num_actions"], actor_torso)
+    critic_network = Critic(critic_torso)
     actor_optim = optax.chain(
         optax.clip_by_global_norm(config["system"]["max_grad_norm"]),
         optax.adam(config["system"]["actor_lr"], eps=1e-5),
