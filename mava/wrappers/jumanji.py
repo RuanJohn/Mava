@@ -132,21 +132,32 @@ class MaConnectorWrapper(MultiAgentWrapper):
         sum reward otherwise.
     """
 
-    def __init__(self, env: MaConnector):
+    # TODO: one hot grid not working yet in the CNN.
+    def __init__(self, env: MaConnector, one_hot_grid_obs: bool = False):
         super().__init__(env)
         self._obs_scale_value = self._num_agents * 3 + AGENT_INITIAL_VALUE
+        self._one_hot_grid_obs = one_hot_grid_obs
 
     def modify_timestep(self, timestep: TimeStep) -> TimeStep[Observation]:
         """Modify the timestep for the Robotic Warehouse environment."""
 
-        observation = Observation(
-            # The grid is (num_agents, grid_size, grid_size)
-            agents_view=jax.tree_util.tree_map(
+        if self._one_hot_grid_obs:
+            # Change the grid shape from (num_agents, grid_size, grid_size) ->
+            # (num_agents, grid_size, grid_size, self._obs_scale_value)
+            agents_view = jax.tree_util.tree_map(
+                lambda x: jax.nn.one_hot(x, self._obs_scale_value), timestep.observation.grid
+            )
+        else:
+            agents_view = jax.tree_util.tree_map(
                 lambda x: x / self._obs_scale_value, timestep.observation.grid
-            ),
+            )
+
+        observation = Observation(
+            agents_view=agents_view,
             action_mask=timestep.observation.action_mask,
             step_count=jnp.repeat(timestep.observation.step_count, self._num_agents),
         )
+
         return timestep.replace(observation=observation)
 
     def observation_spec(self) -> specs.Spec[Observation]:
@@ -158,13 +169,22 @@ class MaConnectorWrapper(MultiAgentWrapper):
             [self.time_limit] * self._num_agents,
             "step_count",
         )
-        agents_view = specs.BoundedArray(
-            shape=(self._num_agents, self._env.grid_size, self._env.grid_size),
-            dtype=jnp.float32,
-            name="agents_view",
-            minimum=0.0,
-            maximum=1.0,
-        )
+        if self._one_hot_grid_obs:
+            agents_view = specs.BoundedArray(
+                shape=(self._num_agents, self._env.grid_size, self._env.grid_size, 3),
+                dtype=jnp.float32,
+                name="agents_view",
+                minimum=0.0,
+                maximum=1.0,
+            )
+        else:
+            agents_view = specs.BoundedArray(
+                shape=(self._num_agents, self._env.grid_size, self._env.grid_size),
+                dtype=jnp.float32,
+                name="agents_view",
+                minimum=0.0,
+                maximum=1.0,
+            )
         action_mask = specs.BoundedArray(
             shape=(self._num_agents, 5),
             dtype=bool,
