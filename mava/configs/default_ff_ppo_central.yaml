@@ -2,6 +2,6 @@ defaults:
   - logger: ff_ppo_central
   - arch: anakin
   - system: ff_ppo_central
-  - env: matrax
-  - network: feedforward
+  - env: ma_connector
+  - network: cnn
   - _self_

@@ -366,6 +366,17 @@ def learner_setup(
     # PRNG keys.
     rng, rng_p = rngs
 
+    # If the network is a cnn, set the max timestep.
+    if config["network"]["actor_network"]["pre_torso"]["network_type"] == "cnn":
+        config["network"]["actor_network"]["pre_torso"]["network_kwargs"][
+            "max_timesteps"
+        ] = env.time_limit
+
+    if config["network"]["critic_network"]["pre_torso"]["network_type"] == "cnn":
+        config["network"]["critic_network"]["pre_torso"]["network_kwargs"][
+            "max_timesteps"
+        ] = env.time_limit
+
     # Define network and optimiser.
     actor_torso, _, critic_torso, _ = make_network_torsos(
         config["network"]["actor_network"], config["network"]["critic_network"]

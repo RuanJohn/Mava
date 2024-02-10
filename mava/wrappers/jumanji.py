@@ -133,7 +133,7 @@ class MaConnectorWrapper(MultiAgentWrapper):
     """
 
     # TODO: one hot grid not working yet in the CNN.
-    def __init__(self, env: MaConnector, one_hot_grid_obs: bool = False):
+    def __init__(self, env: MaConnector, one_hot_grid_obs: bool = True):
         super().__init__(env)
         self._obs_scale_value = self._num_agents * 3 + AGENT_INITIAL_VALUE
         self._one_hot_grid_obs = one_hot_grid_obs
@@ -171,11 +171,16 @@ class MaConnectorWrapper(MultiAgentWrapper):
         )
         if self._one_hot_grid_obs:
             agents_view = specs.BoundedArray(
-                shape=(self._num_agents, self._env.grid_size, self._env.grid_size, 3),
+                shape=(
+                    self._num_agents,
+                    self._env.grid_size,
+                    self._env.grid_size,
+                    self._obs_scale_value,
+                ),
                 dtype=jnp.float32,
                 name="agents_view",
                 minimum=0.0,
-                maximum=1.0,
+                maximum=self._obs_scale_value,
             )
         else:
             agents_view = specs.BoundedArray(

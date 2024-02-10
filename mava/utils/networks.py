@@ -129,22 +129,26 @@ class CNNTorso(nn.Module):
             should_concatenate_step_count=self.should_concatenate_step_count,
             max_timesteps=self.max_timesteps,
         )
-        # Input will be (grid_size, grid_size)
-        # CNN should go from (grid_size, grid_size) -> (num_features)
+        # Input will either be (batch, grid_size, grid_size)
+        # or (batch, grid_size, grid_size, num_one_hot_features)
         self.cnn_block = nn.Sequential(
             [
                 nn.Conv(features=self.conv_n_channels, kernel_size=(3, 3), padding="SAME"),
                 self.activation_fn,
                 nn.Conv(features=self.conv_n_channels, kernel_size=(3, 3), padding="SAME"),
                 self.activation_fn,
+                nn.Conv(features=self.conv_n_channels // 2, kernel_size=(3, 3), padding="SAME"),
+                self.activation_fn,
+                nn.Conv(features=2, kernel_size=(3, 3), padding="SAME"),
+                self.activation_fn,
             ]
         )
 
     def __call__(self, observation: chex.Array) -> chex.Array:
         """Forward pass."""
-        x = observation.agents_view  # (B, grid, grid)
-        x = self.cnn_block(x)  # (B, grid, num_features)
-        x = x.reshape((x.shape[0], -1))  # (B, grid * num_features)
+        x = observation.agents_view  # (B, grid, grid) or (B, grid, grid, num_one_hot_features)
+        x = self.cnn_block(x)  # (B, grid, grid, 2)
+        x = x.reshape((x.shape[0], -1))  # (B, grid * grid * 2)
 
         x = self.normalize_step_count(x, jnp.expand_dims(observation.step_count, axis=-1))
 
