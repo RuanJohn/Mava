@@ -63,12 +63,19 @@ def get_ff_evaluator_fn(
 
             # Select action.
             key, policy_key = jax.random.split(key)
-            pi = apply_fn(params, last_timestep.observation)
+            pi = apply_fn(
+                params,
+                jax.tree_util.tree_map(
+                    lambda x: jnp.expand_dims(x, axis=0), last_timestep.observation
+                ),
+            )
 
             if config.arch.evaluation_greedy:
                 action = pi.mode()
             else:
                 action = pi.sample(seed=policy_key)
+
+            action = jnp.squeeze(action, axis=0)
 
             # Step environment.
             env_state, timestep = env.step(env_state, action)
@@ -311,14 +318,18 @@ def evaluator_setup(
             10,
         )
     else:
-        vmapped_eval_apply_fn = jax.vmap(
-            network.apply,
-            in_axes=(None, 0),
-        )
-        evaluator = get_ff_evaluator_fn(eval_env, vmapped_eval_apply_fn, config, log_win_rate)
+
+        if config.system.central_controller:
+            network_apply_fn = network.apply
+        else:
+            network_apply_fn = jax.vmap(
+                network.apply,
+                in_axes=(None, 0),
+            )
+        evaluator = get_ff_evaluator_fn(eval_env, network_apply_fn, config, log_win_rate)
         absolute_metric_evaluator = get_ff_evaluator_fn(
             eval_env,
-            vmapped_eval_apply_fn,
+            network_apply_fn,
             config,
             log_win_rate,
             10,

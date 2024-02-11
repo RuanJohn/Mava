@@ -1,0 +1,7 @@
+defaults:
+  - logger: ff_ppo_central
+  - arch: anakin
+  - system: ff_ppo_central
+  - network: mlp
+  - env: rware
+  - _self_
