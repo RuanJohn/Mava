@@ -47,7 +47,7 @@ from mava.utils.checkpointing import Checkpointer
 from mava.utils.jax import merge_leading_dims, unreplicate_learner_state
 from mava.utils.logger import LogEvent, MavaLogger
 from mava.utils.total_timestep_checker import check_total_timesteps
-from mava.utils.training import make_learning_rate
+from mava.utils.training import add_info_to_network_config, make_learning_rate
 
 
 def get_learner_fn(
@@ -348,6 +348,8 @@ def learner_setup(
 
     # PRNG keys.
     key, actor_net_key, critic_net_key = keys
+
+    config = add_info_to_network_config(config, env.observation_spec().agents_view.shape[1])
 
     # Define network and optimiser.
     actor_torso = hydra.utils.instantiate(config.network.actor_network.pre_torso)

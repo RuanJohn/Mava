@@ -38,11 +38,23 @@ class MLPTorso(nn.Module):
     layer_sizes: Sequence[int]
     activation_fn: Callable[[chex.Array], chex.Array] = nn.relu
     use_layer_norm: bool = False
+    centralised_critic: bool = False
+    post_torso: bool = False
 
     @nn.compact
     def __call__(self, observation: chex.Array) -> chex.Array:
         """Forward pass."""
-        x = observation
+
+        # TODO: This is so ugly!
+        if self.post_torso:
+            x = observation
+
+        else:
+            if self.centralised_critic:
+                x = observation.global_state
+            else:
+                x = observation.agents_view
+
         for layer_size in self.layer_sizes:
             x = nn.Dense(layer_size, kernel_init=orthogonal(np.sqrt(2)))(x)
             if self.use_layer_norm:
@@ -60,7 +72,7 @@ class FeedForwardActor(nn.Module):
     @nn.compact
     def __call__(self, observation: Observation) -> distrax.Categorical:
         """Forward pass."""
-        x = observation.agents_view
+        x = observation
 
         x = self.torso(x)
         actor_logits = nn.Dense(self.num_actions, kernel_init=orthogonal(0.01))(x)
@@ -78,19 +90,10 @@ class FeedForwardCritic(nn.Module):
     """Feedforward Critic Network."""
 
     torso: nn.Module
-    centralised_critic: bool = False
 
     @nn.compact
     def __call__(self, observation: Union[Observation, ObservationGlobalState]) -> chex.Array:
         """Forward pass."""
-        if self.centralised_critic:
-            if not isinstance(observation, ObservationGlobalState):
-                raise ValueError("Global state must be provided to the centralised critic.")
-            # Get global state in the case of a centralised critic.
-            observation = observation.global_state
-        else:
-            # Get single agent view in the case of a decentralised critic.
-            observation = observation.agents_view
 
         critic_output = self.torso(observation)
         critic_output = nn.Dense(1, kernel_init=orthogonal(1.0))(critic_output)
@@ -143,7 +146,7 @@ class RecurrentActor(nn.Module):
         """Forward pass."""
         observation, done = observation_done
 
-        policy_embedding = self.pre_torso(observation.agents_view)
+        policy_embedding = self.pre_torso(observation)
         policy_rnn_input = (policy_embedding, done)
         policy_hidden_state, policy_embedding = ScannedRNN()(policy_hidden_state, policy_rnn_input)
         actor_logits = self.post_torso(policy_embedding)
@@ -165,7 +168,6 @@ class RecurrentCritic(nn.Module):
 
     pre_torso: nn.Module
     post_torso: nn.Module
-    centralised_critic: bool = False
 
     @nn.compact
     def __call__(
@@ -175,15 +177,6 @@ class RecurrentCritic(nn.Module):
     ) -> Tuple[chex.Array, chex.Array]:
         """Forward pass."""
         observation, done = observation_done
-
-        if self.centralised_critic:
-            if not isinstance(observation, ObservationGlobalState):
-                raise ValueError("Global state must be provided to the centralised critic.")
-            # Get global state in the case of a centralised critic.
-            observation = observation.global_state
-        else:
-            # Get single agent view in the case of a decentralised critic.
-            observation = observation.agents_view
 
         critic_embedding = self.pre_torso(observation)
         critic_rnn_input = (critic_embedding, done)
@@ -206,7 +199,6 @@ class FeedForwardCentralActor(nn.Module):
     @nn.compact
     def __call__(self, observation: ObservationCentralController) -> distrax.Categorical:
         """Forward pass."""
-        # x = observation.agents_view
 
         actor_output = self.torso(observation)
         actor_output = nn.Dense(

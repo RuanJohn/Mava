@@ -56,3 +56,27 @@ def make_learning_rate(init_lr: float, config: DictConfig) -> Union[float, Calla
         return make_learning_rate_schedule(init_lr, config)
     else:
         return init_lr
+
+
+# TODO: Really don't like having to set centralied critic here. Consider different critic torsos.
+def add_info_to_network_config(
+    config: DictConfig, obs_dim: int, centralised_critic: bool = False
+) -> DictConfig:
+    """Adds additional information to the network configuration."""
+
+    if "Transformer" in config.network.actor_network.pre_torso._target_:
+        config.network.actor_network.pre_torso.key_size = obs_dim
+
+    if "Transformer" in config.network.critic_network.pre_torso._target_:
+        config.network.critic_network.pre_torso.key_size = obs_dim
+
+    if "CNN" in config.network.actor_network.pre_torso._target_:
+        config.network.actor_network.pre_torso.max_timesteps = config.env.kwargs.time_limit
+
+    if "CNN" in config.network.critic_network.pre_torso._target_:
+        config.network.critic_network.pre_torso.max_timesteps = config.env.kwargs.time_limit
+
+    if centralised_critic:
+        config.network.critic_network.pre_torso.centralised_critic = centralised_critic
+
+    return config

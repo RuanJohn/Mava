@@ -126,8 +126,8 @@ def make_matrax_env(
     wrapper = _matrax_registry[env_name]["wrapper"]
 
     # Create envs.
-    env = matrax.make(task_name)
-    eval_env = matrax.make(task_name)
+    env = matrax.make(task_name, **config.env.kwargs)
+    eval_env = matrax.make(task_name, **config.env.kwargs)
     env, eval_env = wrapper(env), wrapper(eval_env)
 
     env = add_optional_wrappers(env, config, add_global_state)

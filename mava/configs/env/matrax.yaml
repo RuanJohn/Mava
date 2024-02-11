@@ -4,3 +4,6 @@ defaults:
   - scenario: climbing-stateless
 
 env_name: Matrax
+
+kwargs:
+  time_limit: 500
