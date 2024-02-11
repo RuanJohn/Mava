@@ -1,0 +1,6 @@
+# The config of the tiny-2ag environment
+task_name: connector-2ag
+
+task_config:
+  num_agents: 2
+  grid_size: 6 # Rule of thumb is to have num_agents * 2 + 2

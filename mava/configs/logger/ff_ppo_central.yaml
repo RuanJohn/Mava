@@ -1,0 +1,8 @@
+defaults:
+    - base_logger
+
+system_name: ff_ppo_central
+
+# --- Other logger kwargs ---
+kwargs:
+  neptune_tag: [ff-ppo-central, ff-central-controller]

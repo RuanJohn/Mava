@@ -1,0 +1,21 @@
+actor_network:
+  pre_torso:
+    _target_: mava.networks.TransformerTorso
+    num_blocks: 1
+    num_heads: 1
+    split_over_heads: False # This will split the observations over mutiple attention heads and keep
+      # the model size the same as the observation size. By default the model size is computed as
+      # key_size * num_heads.
+    key_size: ~ # this is a runtime argument based on the obs size
+    mlp_units: [128]
+
+critic_network:
+  pre_torso:
+    _target_: mava.networks.TransformerTorso
+    num_blocks: 1
+    num_heads: 1
+    split_over_heads: False # This will split the observations over mutiple attention heads and keep
+      # the model size the same as the observation size. By default the model size is computed as
+      # key_size * num_heads.
+    key_size: ~ # this is a runtime argument based on the obs size
+    mlp_units: [128]

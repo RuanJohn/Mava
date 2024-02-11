@@ -15,9 +15,12 @@
 from typing import Tuple
 
 import chex
+import jax
 import jax.numpy as jnp
 from jumanji import specs
 from jumanji.env import Environment
+from jumanji.environments.routing.connector import MaConnector
+from jumanji.environments.routing.connector.constants import AGENT_INITIAL_VALUE
 from jumanji.environments.routing.lbf import LevelBasedForaging
 from jumanji.environments.routing.robot_warehouse import RobotWarehouse
 from jumanji.types import TimeStep
@@ -117,3 +120,86 @@ class LbfWrapper(MultiAgentWrapper):
 
         # Aggregate the list of individual rewards and use a single team_reward.
         return self.aggregate_rewards(timestep, modified_observation)
+
+
+class MaConnectorWrapper(MultiAgentWrapper):
+    """
+    Multi-agent wrapper for the MaConnector environment.
+    Args:
+        env (Environment): The base environment.
+        use_individual_rewards (bool): If true each agent gets a separate reward,
+        sum reward otherwise.
+    """
+
+    # TODO: one hot grid not working yet in the CNN.
+    def __init__(self, env: MaConnector, one_hot_grid_obs: bool = True):
+        super().__init__(env)
+        self._obs_scale_value = self._num_agents * 3 + AGENT_INITIAL_VALUE
+        self._one_hot_grid_obs = one_hot_grid_obs
+
+    def modify_timestep(self, timestep: TimeStep) -> TimeStep[Observation]:
+        """Modify the timestep for the Robotic Warehouse environment."""
+
+        if self._one_hot_grid_obs:
+            # Change the grid shape from (num_agents, grid_size, grid_size) ->
+            # (num_agents, grid_size, grid_size, self._obs_scale_value)
+            agents_view = jax.tree_util.tree_map(
+                lambda x: jax.nn.one_hot(x, self._obs_scale_value), timestep.observation.grid
+            )
+        else:
+            agents_view = jax.tree_util.tree_map(
+                lambda x: x / self._obs_scale_value, timestep.observation.grid
+            )
+
+        observation = Observation(
+            agents_view=agents_view,
+            action_mask=timestep.observation.action_mask,
+            step_count=jnp.repeat(timestep.observation.step_count, self._num_agents),
+        )
+
+        return timestep.replace(observation=observation)
+
+    def observation_spec(self) -> specs.Spec[Observation]:
+        """Specification of the observation of the environment."""
+        step_count = specs.BoundedArray(
+            (self._num_agents,),
+            jnp.int32,
+            [0] * self._num_agents,
+            [self.time_limit] * self._num_agents,
+            "step_count",
+        )
+        if self._one_hot_grid_obs:
+            agents_view = specs.BoundedArray(
+                shape=(
+                    self._num_agents,
+                    self._env.grid_size,
+                    self._env.grid_size,
+                    self._obs_scale_value,
+                ),
+                dtype=jnp.float32,
+                name="agents_view",
+                minimum=0.0,
+                maximum=self._obs_scale_value,
+            )
+        else:
+            agents_view = specs.BoundedArray(
+                shape=(self._num_agents, self._env.grid_size, self._env.grid_size),
+                dtype=jnp.float32,
+                name="agents_view",
+                minimum=0.0,
+                maximum=1.0,
+            )
+        action_mask = specs.BoundedArray(
+            shape=(self._num_agents, 5),
+            dtype=bool,
+            minimum=False,
+            maximum=True,
+            name="action_mask",
+        )
+        return specs.Spec(
+            Observation,
+            "ObservationSpec",
+            agents_view=agents_view,
+            action_mask=action_mask,
+            step_count=step_count,
+        )

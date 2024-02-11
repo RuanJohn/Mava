@@ -1,0 +1,15 @@
+actor_network:
+  pre_torso:
+    _target_: mava.networks.CNNTorso
+    conv_n_channels: 32
+    activation: relu
+    max_timesteps: 1
+    should_concatenate_step_count: True
+
+critic_network:
+  pre_torso:
+    _target_: mava.networks.CNNTorso
+    conv_n_channels: 32
+    activation: relu
+    max_timesteps: 1
+    should_concatenate_step_count: True

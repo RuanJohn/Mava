@@ -1,0 +1,10 @@
+# The config of the 15x15-3p-5f scenario with the VectorObserver set as default
+task_name: 40x40-10p-10f
+
+task_config:
+  grid_size: 40
+  fov: 40
+  num_agents: 10
+  num_food: 10
+  max_agent_level: 2
+  force_coop: False

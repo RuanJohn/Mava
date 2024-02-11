@@ -1,0 +1,3 @@
+python mava/systems/ff_ppo_central.py -m system.seed=0,1,2,3,4 env=lbf env/scenario=2s-8x8-2p-2f,8x8-2p-2f,10x10-3p-3f,2s-10x10-3p-3f,15x15-4p-4f,2s-15x15-4p-4f,20x20-5p-5f,2s-20x20-5p-5f,30x30-7p-7f,2s-30x30-7p-7f,40x40-10p-10f,2s-40x40-10p-10f && \
+python mava/systems/ff_ippo.py -m system.seed=0,1,2,3,4 env=lbf env/scenario=2s-8x8-2p-2f,8x8-2p-2f,10x10-3p-3f,2s-10x10-3p-3f,15x15-4p-4f,2s-15x15-4p-4f,20x20-5p-5f,2s-20x20-5p-5f,30x30-7p-7f,2s-30x30-7p-7f,40x40-10p-10f,2s-40x40-10p-10f && \
+python mava/systems/ff_mappo.py -m system.seed=0,1,2,3,4 env=lbf env/scenario=2s-8x8-2p-2f,8x8-2p-2f,10x10-3p-3f,2s-10x10-3p-3f,15x15-4p-4f,2s-15x15-4p-4f,20x20-5p-5f,2s-20x20-5p-5f,30x30-7p-7f,2s-30x30-7p-7f,40x40-10p-10f,2s-40x40-10p-10f

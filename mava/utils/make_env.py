@@ -16,8 +16,12 @@ from typing import Tuple
 
 import jaxmarl
 import jumanji
+import matrax
 from jaxmarl.environments.smax import map_name_to_scenario
 from jumanji.env import Environment
+from jumanji.environments.routing.connector.generator import (
+    RandomWalkGenerator as ConnectorGenerator,
+)
 from jumanji.environments.routing.lbf.generator import (
     RandomGenerator as LbfRandomGenerator,
 )
@@ -29,9 +33,12 @@ from omegaconf import DictConfig
 
 from mava.wrappers import (
     AgentIDWrapper,
+    CentralControllerWrapper,
     GlobalStateWrapper,
     JaxMarlWrapper,
     LbfWrapper,
+    MaConnectorWrapper,
+    MatraxWrapper,
     RecordEpisodeMetrics,
     RwareWrapper,
 )
@@ -40,6 +47,11 @@ from mava.wrappers import (
 _jumanji_registry = {
     "RobotWarehouse-v0": {"generator": RwareRandomGenerator, "wrapper": RwareWrapper},
     "LevelBasedForaging-v0": {"generator": LbfRandomGenerator, "wrapper": LbfWrapper},
+    "MaConnector-v2": {"generator": ConnectorGenerator, "wrapper": MaConnectorWrapper},
+}
+
+_matrax_registry = {
+    "Matrax": {"wrapper": MatraxWrapper},
 }
 
 
@@ -53,6 +65,13 @@ def add_optional_wrappers(
     # Add agent id to observation.
     if config.system.add_agent_id:
         env = AgentIDWrapper(env, add_global_state)
+
+    if config.system.central_controller:
+        if config.system.add_agent_id or add_global_state:
+            raise ValueError(
+                "Central controller and agent id or global state cannot be used together."
+            )
+        env = CentralControllerWrapper(env)
 
     return env
 
@@ -79,6 +98,36 @@ def make_jumanji_env(
     # Create envs.
     env = jumanji.make(env_name, generator=generator, **config.env.kwargs)
     eval_env = jumanji.make(env_name, generator=generator, **config.env.kwargs)
+    env, eval_env = wrapper(env), wrapper(eval_env)
+
+    env = add_optional_wrappers(env, config, add_global_state)
+    eval_env = add_optional_wrappers(eval_env, config, add_global_state)
+
+    env = AutoResetWrapper(env)
+    env = RecordEpisodeMetrics(env)
+
+    return env, eval_env
+
+
+def make_matrax_env(
+    env_name: str, config: DictConfig, add_global_state: bool = False
+) -> Tuple[Environment, Environment]:
+    """
+     Create a Matrax environment.
+    Args:
+        env_name (str): The name of the environment to create.
+        config (Dict): The configuration of the environment.
+        add_global_state (bool): Whether to add the global state to the observation.
+    Returns:
+        Tuple of Matrax environments.
+    """
+
+    task_name = config["env"]["scenario"]["task_name"]
+    wrapper = _matrax_registry[env_name]["wrapper"]
+
+    # Create envs.
+    env = matrax.make(task_name)
+    eval_env = matrax.make(task_name)
     env, eval_env = wrapper(env), wrapper(eval_env)
 
     env = add_optional_wrappers(env, config, add_global_state)
@@ -141,5 +190,7 @@ def make(config: DictConfig, add_global_state: bool = False) -> Tuple[Environmen
         return make_jumanji_env(env_name, config, add_global_state)
     elif env_name in jaxmarl.registered_envs:
         return make_jaxmarl_env(env_name, config, add_global_state)
+    elif env_name in _matrax_registry:
+        return make_matrax_env(env_name, config, add_global_state)
     else:
         raise ValueError(f"{env_name} is not a supported environment.")

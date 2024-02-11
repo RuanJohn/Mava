@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import functools
-from typing import Callable, Dict, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import chex
 import distrax
@@ -21,11 +21,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
-from flax.linen.initializers import orthogonal
-from omegaconf import DictConfig
+from flax.linen.initializers import constant, orthogonal
 
 from mava.types import (
     Observation,
+    ObservationCentralController,
     ObservationGlobalState,
     RNNGlobalObservation,
     RNNObservation,
@@ -194,50 +194,214 @@ class RecurrentCritic(nn.Module):
         return critic_hidden_state, jnp.squeeze(critic_output, axis=-1)
 
 
-def parse_activation_fn(activation_fn_name: str) -> Callable[[chex.Array], chex.Array]:
-    """Get the activation function."""
-    activation_fns: Dict[str, Callable[[chex.Array], chex.Array]] = {
-        "relu": nn.relu,
-        "tanh": nn.tanh,
-    }
-    return activation_fns[activation_fn_name]
+class FeedForwardCentralActor(nn.Module):
+    """Actor Network."""
+
+    action_dim: Sequence[int]
+    torso: MLPTorso = MLPTorso(
+        layer_sizes=[128, 128],
+        activation_fn=nn.relu,
+    )
+
+    @nn.compact
+    def __call__(self, observation: ObservationCentralController) -> distrax.Categorical:
+        """Forward pass."""
+        # x = observation.agents_view
+
+        actor_output = self.torso(observation)
+        actor_output = nn.Dense(
+            self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
+        )(actor_output)
+
+        masked_logits = jnp.where(
+            observation.joint_action_mask,
+            actor_output,
+            jnp.finfo(jnp.float32).min,
+        )
+        actor_policy = distrax.Categorical(logits=masked_logits)
+
+        return actor_policy
 
 
-def make(
-    config: DictConfig, network: str, centralised_critic: bool = False
-) -> Union[Tuple[FeedForwardActor, FeedForwardCritic], Tuple[RecurrentActor, RecurrentCritic]]:
-    """Get the networks."""
+class TransformerBlock(nn.Module):
+    num_heads: int
+    key_size: int
+    mlp_units: Sequence[int]
+    w_init_scale: float
+    split_over_heads: bool
+    name: Optional[str] = None
+    """Initialises the transformer block module.
+    Args:
+        num_heads: number of independent attention heads (H).
+        key_size: the size of keys (K) and queries (Q) used in the attention mechanism.
+        mlp_units: sequence of MLP layers in the feedforward networks following self-attention.
+        w_init_scale: scale to `VarianceScaling` weight initializer.
+        split_over_heads: whether to split keys, queries and values over heads.
+        name: optional name for this module.
+    """
 
-    def create_torso(network_key: str, layer_size_key: str) -> MLPTorso:
-        """Helper function to create a torso object from the config."""
-        activation_fn = parse_activation_fn(config.network[network_key]["activation"])
-        return MLPTorso(
-            layer_sizes=config.network[network_key][layer_size_key],
-            activation_fn=activation_fn,
-            use_layer_norm=config.network[network_key].use_layer_norm,
+    def setup(self) -> None:
+        self.w_init = nn.initializers.variance_scaling(
+            self.w_init_scale, "fan_in", "truncated_normal"
+        )
+        if self.split_over_heads:
+            if self.key_size % self.num_heads != 0:
+                raise ValueError("Key size must be divisible by number of heads")
+            self.model_size = self.key_size
+        else:
+            self.model_size = self.key_size * self.num_heads
+
+    @nn.compact
+    def __call__(
+        self,
+        query: chex.Array,
+        key: chex.Array,
+        value: Optional[chex.Array] = None,
+        mask: Optional[chex.Array] = None,
+    ) -> chex.Array:
+        """Computes in this order:
+            - (optionally masked) MHA with queries, keys & values
+            - skip connection
+            - layer norm
+            - MLP
+            - skip connection
+            - layer norm
+        This module broadcasts over zero or more 'batch-like' leading dimensions.
+        Args:
+            query: embeddings sequence used to compute queries; shape [..., T', D_q].
+            key: embeddings sequence used to compute keys; shape [..., T, D_k].
+            value: embeddings sequence used to compute values; shape [..., T, D_v].
+            mask: optional mask applied to attention weights; shape [..., H=1, T', T].
+        Returns:
+            A new sequence of embeddings, consisting of a projection of the
+                attention-weighted value projections; shape [..., T', D'].
+        """
+
+        # Multi-head attention and residual connection
+        mha = nn.MultiHeadDotProductAttention(
+            num_heads=self.num_heads,
+            kernel_init=self.w_init,
+            out_features=self.model_size,
+        )
+        h = mha(inputs_q=query, inputs_kv=key) + query
+        h = nn.LayerNorm(use_scale=True, use_bias=True)(h)
+
+        # MLP and residual connection
+        for mlp_layer in self.mlp_units:
+            out = nn.Dense(mlp_layer)(h)
+            out = nn.relu(out)
+        out = nn.Dense(self.model_size)(h)
+        out = nn.relu(out) + h
+        out = nn.LayerNorm(use_scale=True, use_bias=True)(out)
+
+        return out
+
+
+class TransformerTorso(nn.Module):
+    num_blocks: int
+    num_heads: int
+    key_size: int
+    mlp_units: Sequence[int]
+    split_over_heads: bool
+    name: Optional[str] = None
+
+    def setup(self) -> None:
+        if self.split_over_heads:
+            if self.key_size % self.num_heads != 0:
+                raise ValueError("Key size must be divisible by number of heads")
+            self.model_size = self.key_size
+        else:
+            self.model_size = self.key_size * self.num_heads
+
+    @nn.compact
+    def __call__(self, observation: chex.Array) -> chex.Array:
+        # Shape names:
+        # B: batch size
+        # O: observation size
+        # H: hidden/embedding size
+        # (B, O)
+        # (B, O + 1) -> (B, H)
+        embeddings = nn.Dense(self.model_size)(observation.agents_view)
+
+        # (B, H) -> (B, H)
+        for block_id in range(self.num_blocks):
+            transformer_block = TransformerBlock(
+                num_heads=self.num_heads,
+                key_size=self.key_size,
+                mlp_units=self.mlp_units,
+                w_init_scale=2 / self.num_blocks,
+                split_over_heads=self.split_over_heads,
+                name=f"self_attention_block_{block_id}",
+            )
+            embeddings = transformer_block(query=embeddings, key=embeddings)
+
+        x = nn.Dense(
+            self.model_size,
+            kernel_init=orthogonal(np.sqrt(2)),
+            bias_init=constant(0.0),
+        )(embeddings)
+        x = nn.relu(x)
+        return x  # (B, H)
+
+
+def make_concatenate_step_count(
+    should_concatenate_step_count: bool,
+    max_timesteps: int,
+) -> nn.Module:
+    def normalize_step_count(step_count: chex.Array) -> chex.Array:
+        return step_count / max_timesteps
+
+    def concatenate_step_count(
+        observation: chex.Array,
+        step_count: chex.Array,
+    ) -> chex.Array:
+        if should_concatenate_step_count:
+            step_count = normalize_step_count(step_count)
+            return jnp.concatenate([observation, step_count], axis=-1)
+        else:
+            return observation
+
+    return concatenate_step_count
+
+
+class CNNTorso(nn.Module):
+    """CNN for processing grid-based environment observations."""
+
+    conv_n_channels: int = 32
+    activation: str = "relu"
+    max_timesteps: int = 1
+    should_concatenate_step_count: bool = False
+
+    def setup(self) -> None:
+        if self.activation == "relu":
+            self.activation_fn = nn.relu
+        elif self.activation == "tanh":
+            self.activation_fn = nn.tanh
+        self.normalize_step_count = make_concatenate_step_count(
+            should_concatenate_step_count=self.should_concatenate_step_count,
+            max_timesteps=self.max_timesteps,
+        )
+        # Input will either be (batch, grid_size, grid_size)
+        # or (batch, grid_size, grid_size, num_one_hot_features)
+        self.cnn_block = nn.Sequential(
+            [
+                nn.Conv(features=self.conv_n_channels, kernel_size=(3, 3), padding="SAME"),
+                self.activation_fn,
+                nn.Conv(features=self.conv_n_channels, kernel_size=(3, 3), padding="SAME"),
+                self.activation_fn,
+                nn.Conv(features=self.conv_n_channels // 2, kernel_size=(3, 3), padding="SAME"),
+                self.activation_fn,
+                nn.Conv(features=2, kernel_size=(3, 3), padding="SAME"),
+                self.activation_fn,
+            ]
         )
 
-    if network == "feedforward":
-        actor = FeedForwardActor(
-            torso=create_torso("actor_network", "layer_sizes"),
-            num_actions=config.system.num_actions,
-        )
-        critic = FeedForwardCritic(
-            torso=create_torso("critic_network", "layer_sizes"),
-            centralised_critic=centralised_critic,
-        )
-    elif network == "recurrent":
-        actor = RecurrentActor(
-            action_dim=config.system.num_actions,
-            pre_torso=create_torso("actor_network", "pre_torso_layer_sizes"),
-            post_torso=create_torso("actor_network", "post_torso_layer_sizes"),
-        )
-        critic = RecurrentCritic(
-            pre_torso=create_torso("critic_network", "pre_torso_layer_sizes"),
-            post_torso=create_torso("critic_network", "post_torso_layer_sizes"),
-            centralised_critic=centralised_critic,
-        )
-    else:
-        raise ValueError(f"The network '{network}' is not supported.")
+    def __call__(self, observation: chex.Array) -> chex.Array:
+        """Forward pass."""
+        x = observation.agents_view  # (B, grid, grid) or (B, grid, grid, num_one_hot_features)
+        x = self.cnn_block(x)  # (B, grid, grid, 2)
+        x = x.reshape((x.shape[0], -1))  # (B, grid * grid * 2)
 
-    return actor, critic
+        x = self.normalize_step_count(x, jnp.expand_dims(observation.step_count, axis=-1))
+
+        return x
