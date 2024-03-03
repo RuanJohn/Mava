@@ -138,6 +138,109 @@ def get_ff_evaluator_fn(
     return evaluator_fn
 
 
+def get_ff_daac_evaluator_fn(
+    env: Environment,
+    apply_fn: ActorApply,
+    config: DictConfig,
+    log_win_rate: bool = False,
+    eval_multiplier: int = 1,
+) -> EvalFn:
+    """Get the evaluator function for feedforward networks.
+
+    Args:
+        env (Environment): An evironment isntance for evaluation.
+        apply_fn (callable): Network forward pass method.
+        config (dict): Experiment configuration.
+        eval_multiplier (int): A scalar that will increase the number of evaluation
+            episodes by a fixed factor. The reason for the increase is to enable the
+            computation of the `absolute metric` which is a metric computed and the end
+            of training by rolling out the policy which obtained the greatest evaluation
+            performance during training for 10 times more episodes than were used at a
+            single evaluation step.
+    """
+
+    def eval_one_episode(params: FrozenDict, init_eval_state: EvalState) -> Dict:
+        """Evaluate one episode. It is vectorized over the number of evaluation episodes."""
+
+        def _env_step(eval_state: EvalState) -> EvalState:
+            """Step the environment."""
+            # PRNG keys.
+            key, env_state, last_timestep, step_count, episode_return = eval_state
+
+            # Select action.
+            key, policy_key = jax.random.split(key)
+            action, _, _ = apply_fn(  # type: ignore
+                params, last_timestep.observation, policy_key, method="get_actions"
+            )
+
+            # Step environment.
+            env_state, timestep = env.step(env_state, action)
+
+            # Log episode metrics.
+            episode_return += timestep.reward
+            step_count += 1
+            eval_state = EvalState(key, env_state, timestep, step_count, episode_return)
+            return eval_state
+
+        def not_done(carry: Tuple) -> bool:
+            """Check if the episode is done."""
+            timestep = carry[2]
+            is_not_done: bool = ~timestep.last()
+            return is_not_done
+
+        final_state = jax.lax.while_loop(not_done, _env_step, init_eval_state)
+
+        eval_metrics = {
+            "episode_return": final_state.episode_return,
+            "episode_length": final_state.step_count,
+        }
+        # Log won episode if win rate is required.
+
+        if log_win_rate:
+            eval_metrics["won_episode"] = final_state.timestep.extras["won_episode"]
+
+        return eval_metrics
+
+    def evaluator_fn(trained_params: FrozenDict, key: chex.PRNGKey) -> ExperimentOutput[EvalState]:
+        """Evaluator function."""
+
+        # Initialise environment states and timesteps.
+        n_devices = len(jax.devices())
+
+        eval_batch = (config.arch.num_eval_episodes // n_devices) * eval_multiplier
+
+        key, *env_keys = jax.random.split(key, eval_batch + 1)
+        env_states, timesteps = jax.vmap(env.reset)(
+            jnp.stack(env_keys),
+        )
+        # Split keys for each core.
+        key, *step_keys = jax.random.split(key, eval_batch + 1)
+        # Add dimension to pmap over.
+        step_keys = jnp.stack(step_keys).reshape(eval_batch, -1)
+
+        eval_state = EvalState(
+            key=step_keys,
+            env_state=env_states,
+            timestep=timesteps,
+            step_count=jnp.zeros((eval_batch, 1)),
+            episode_return=jnp.zeros_like(timesteps.reward),
+        )
+
+        eval_metrics = jax.vmap(
+            eval_one_episode,
+            in_axes=(None, 0),
+            axis_name="eval_batch",
+        )(trained_params, eval_state)
+
+        return ExperimentOutput(
+            learner_state=eval_state,
+            episode_metrics=eval_metrics,
+            train_metrics={},
+        )
+
+    return evaluator_fn
+
+
 def get_rnn_evaluator_fn(
     env: Environment,
     apply_fn: RecActorApply,
@@ -283,6 +386,7 @@ def make_eval_fns(
     network: Any,
     config: DictConfig,
     use_recurrent_net: bool = False,
+    use_daac: bool = False,
     scanned_rnn: Optional[nn.Module] = None,
 ) -> Tuple[EvalFn, EvalFn]:
     """Initialise evaluator_fn."""
@@ -306,6 +410,12 @@ def make_eval_fns(
             log_win_rate,
             10,
         )
+    elif use_daac:
+        evaluator = get_ff_daac_evaluator_fn(eval_env, network.apply, config, log_win_rate)
+        absolute_metric_evaluator = get_ff_daac_evaluator_fn(
+            eval_env, network.apply, config, log_win_rate, 10
+        )
+
     else:
         evaluator = get_ff_evaluator_fn(eval_env, network.apply, config, log_win_rate)
         absolute_metric_evaluator = get_ff_evaluator_fn(
