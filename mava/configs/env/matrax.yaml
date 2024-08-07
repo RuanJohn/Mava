@@ -32,4 +32,4 @@ implicit_agent_id: False
 log_win_rate: False
 
 kwargs:
-  time_limit: 25
+  time_limit: 1

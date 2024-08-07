@@ -37,6 +37,7 @@ from mava.types import MarlEnv
 from mava.wrappers import (
     AgentIDWrapper,
     AutoResetWrapper,
+    CentralControllerWrapper,
     CleanerWrapper,
     ConnectorWrapper,
     GigastepWrapper,
@@ -71,6 +72,10 @@ def add_extra_wrappers(
 ) -> Tuple[MarlEnv, MarlEnv]:
     # Disable the AgentID wrapper if the environment has implicit agent IDs.
     config.system.add_agent_id = config.system.add_agent_id & (~config.env.implicit_agent_id)
+
+    if config.system.is_central_controller:
+        train_env = CentralControllerWrapper(train_env)
+        eval_env = CentralControllerWrapper(eval_env)
 
     if config.system.add_agent_id:
         train_env = AgentIDWrapper(train_env)

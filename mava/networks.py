@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import functools
-from typing import Callable, Dict, Sequence, Tuple, Union
+from typing import Callable, Dict, Optional, Sequence, Tuple, Union
 
 import chex
 import jax
@@ -34,6 +34,7 @@ from mava.types import (
     RNNGlobalObservation,
     RNNObservation,
 )
+from mava.utils.centralised_controller import compute_joint_action_mask, get_all_action_combinations
 
 
 class MLPTorso(nn.Module):
@@ -89,6 +90,9 @@ class DiscreteActionHead(nn.Module):
     """Discrete Action Head"""
 
     action_dim: int
+    is_central_controller: bool = False
+    num_agents: Optional[int] = None
+    num_indiv_actions: Optional[int] = None
 
     @nn.compact
     def __call__(
@@ -113,8 +117,22 @@ class DiscreteActionHead(nn.Module):
         """
         actor_logits = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01))(obs_embedding)
 
+        if self.is_central_controller:
+            if self.num_agents is None or self.num_indiv_actions is None:
+                raise ValueError(
+                    "Number of agents and actions must be provided for central controller."
+                )
+
+            action_combinations = get_all_action_combinations(
+                self.num_agents, self.num_indiv_actions
+            )
+            action_mask = compute_joint_action_mask(observation.action_mask, action_combinations)
+            action_mask = action_mask.squeeze(axis=-1)
+        else:
+            action_mask = observation.action_mask
+
         masked_logits = jnp.where(
-            observation.action_mask,
+            action_mask,
             actor_logits,
             jnp.finfo(jnp.float32).min,
         )

@@ -2,7 +2,7 @@
 
 total_timesteps: ~ # Set the total environment steps.
 # If unspecified, it's derived from num_updates; otherwise, num_updates adjusts based on this value.
-num_updates: 980 # 490 # Number of updates
+num_updates: 980 #490 # Number of updates
 seed: 42
 
 # --- Agent observations ---
@@ -23,4 +23,4 @@ vf_coef: 0.5 # Critic weight in
 max_grad_norm: 0.5 # Maximum norm of the gradients for a weight update.
 decay_learning_rates: False # Whether learning rates should be linearly decayed during training.
 
-is_central_controller: False # Whether the system is a central controller, ie CTCE.
+is_central_controller: True # Whether the system is a central controller, ie CTCE.

@@ -43,12 +43,12 @@ class MatraxWrapper(Wrapper):
     ) -> TimeStep[Union[Observation, ObservationGlobalState]]:
         """Modify the timestep for `step` and `reset`."""
         obs_data = {
-            "agents_view": timestep.observation.agent_obs,
+            "agents_view": timestep.observation.agent_obs.astype(float),
             "action_mask": self.action_mask,
             "step_count": jnp.repeat(timestep.observation.step_count, self.num_agents),
         }
         if self.add_global_state:
-            global_state = jnp.concatenate(timestep.observation.agent_obs, axis=0)
+            global_state = jnp.concatenate(timestep.observation.agent_obs, axis=0).astype(float)
             global_state = jnp.tile(global_state, (self.num_agents, 1))
             obs_data["global_state"] = global_state
             return timestep.replace(observation=ObservationGlobalState(**obs_data))
@@ -81,7 +81,13 @@ class MatraxWrapper(Wrapper):
         )
         obs_spec = self._env.observation_spec()
         obs_data = {
-            "agents_view": obs_spec.agent_obs,
+            "agents_view": specs.BoundedArray(
+                shape=obs_spec.agent_obs.shape,
+                dtype=jnp.float32,
+                minimum=obs_spec.agent_obs.minimum,
+                maximum=obs_spec.agent_obs.maximum,
+                name="agents_view",
+            ),
             "action_mask": action_mask,
             "step_count": step_count,
         }
