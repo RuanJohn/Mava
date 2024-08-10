@@ -52,6 +52,8 @@ env_seeds = [41, 42, 43, 44, 45, 46, 47, 48, 49, 50]
 system_seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 system_names = ["ff_ppo_central", "ff_ippo", "ff_mappo"]
 
+envs_run = ["matrax-3-ag-4-act", "matrax-2-ag-4-act"]
+
 
 def make_task_name(num_agents: int) -> str:
     return f"matrax-{num_agents}-ag-4-act"
@@ -66,20 +68,24 @@ if __name__ == "__main__":
                 for system_seed in system_seeds:
                     task_name = make_task_name(num_agent)
 
-                    logging.info(f"Running experiment {system_name} - {task_name}")
+                    if system_name == "ff_ppo_central" and task_name in envs_run:
+                        continue
 
-                    script_contents = get_script_contents(
-                        system_name=system_name,
-                        env_seed=env_seed,
-                        system_seed=system_seed,
-                        task_name=task_name,
-                        num_agent=num_agent,
-                    )
-                    with open("run.sh", "w") as f:
-                        f.write(script_contents)
-                    try:
-                        subprocess.run(["./run.sh"], check=True)
-                        logging.info("Experiment launched successfully")
+                    else:
+                        logging.info(f"Running experiment {system_name} - {task_name}")
 
-                    except subprocess.CalledProcessError as e:
-                        logging.error(f"Error launching the experiment: {e}")
+                        script_contents = get_script_contents(
+                            system_name=system_name,
+                            env_seed=env_seed,
+                            system_seed=system_seed,
+                            task_name=task_name,
+                            num_agent=num_agent,
+                        )
+                        with open("run.sh", "w") as f:
+                            f.write(script_contents)
+                        try:
+                            subprocess.run(["./run.sh"], check=True)
+                            logging.info("Experiment launched successfully")
+
+                        except subprocess.CalledProcessError as e:
+                            logging.error(f"Error launching the experiment: {e}")
