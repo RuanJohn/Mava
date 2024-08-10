@@ -2,11 +2,11 @@
 
 total_timesteps: ~ # Set the total environment steps.
 # If unspecified, it's derived from num_updates; otherwise, num_updates adjusts based on this value.
-num_updates: 980 # 490 # Number of updates
+num_updates: 820 # Number of updates
 seed: 42
 
 # --- Agent observations ---
-add_agent_id: False
+add_agent_id: True
 
 # --- RL hyperparameters ---
 actor_lr: 0.001 # Learning rate for actor network

@@ -31,6 +31,7 @@ from jumanji.environments.routing.lbf.generator import (
 from jumanji.environments.routing.robot_warehouse.generator import (
     RandomGenerator as RwareRandomGenerator,
 )
+from matrax.generalised_matrix_game import MatrixGame as GeneralMatrixGame
 from omegaconf import DictConfig
 
 from mava.types import MarlEnv
@@ -63,6 +64,7 @@ _jumanji_registry = {
 
 # Registry mapping environment names directly to the corresponding wrapper classes.
 _matrax_registry = {"Matrax": MatraxWrapper}
+_general_matrax_registry = {"GeneralMatrax": MatraxWrapper}
 _jaxmarl_registry: Dict[str, Type[JaxMarlWrapper]] = {"Smax": SmaxWrapper, "MaBrax": MabraxWrapper}
 _gigastep_registry = {"Gigastep": GigastepWrapper}
 
@@ -188,6 +190,36 @@ def make_matrax_env(
     return train_env, eval_env
 
 
+def make_general_matrax_env(
+    env_name: str, config: DictConfig, add_global_state: bool = False
+) -> Tuple[MarlEnv, MarlEnv]:
+    """
+    Creates Matrax environments for training and evaluation.
+
+    Args:
+    ----
+        env_name: The name of the environment to create.
+        config: The configuration of the environment.
+        add_global_state: Whether to add the global state to the observation.
+
+    Returns:
+    -------
+        A tuple containing a train and evaluation Matrax environment.
+
+    """
+    # Select the Matrax wrapper.
+    wrapper = _general_matrax_registry[env_name]
+
+    # Create envs.
+    train_env = GeneralMatrixGame(**config.env.scenario.task_config, **config.env.kwargs)
+    eval_env = GeneralMatrixGame(**config.env.scenario.task_config, **config.env.kwargs)
+    train_env = wrapper(train_env, add_global_state)
+    eval_env = wrapper(eval_env, add_global_state)
+
+    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config)
+    return train_env, eval_env
+
+
 def make_gigastep_env(
     env_name: str, config: DictConfig, add_global_state: bool = False
 ) -> Tuple[MarlEnv, MarlEnv]:
@@ -239,6 +271,8 @@ def make(config: DictConfig, add_global_state: bool = False) -> Tuple[MarlEnv, M
         return make_jaxmarl_env(env_name, config, add_global_state)
     elif env_name in _matrax_registry:
         return make_matrax_env(env_name, config, add_global_state)
+    elif env_name in _general_matrax_registry:
+        return make_general_matrax_env(env_name, config, add_global_state)
     elif env_name in _gigastep_registry:
         return make_gigastep_env(env_name, config, add_global_state)
     else:

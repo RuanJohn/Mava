@@ -1,8 +1,8 @@
-# --- Defaults FF-IPPO ---
+# --- Defaults FF-PPO-Central ---
 
 total_timesteps: ~ # Set the total environment steps.
 # If unspecified, it's derived from num_updates; otherwise, num_updates adjusts based on this value.
-num_updates: 980 #490 # Number of updates
+num_updates: 820 # Number of updates
 seed: 42
 
 # --- Agent observations ---
