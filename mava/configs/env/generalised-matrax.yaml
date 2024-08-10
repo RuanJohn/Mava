@@ -6,7 +6,7 @@ env_name: GeneralMatrax  # Used for logging purposes.
 
 scenario:
   name: GeneralMatrax
-  task_name: matrix-3-ag-4-act-seed-41
+  task_name: matrax-3-ag-4-act
 
   task_config:
     key_integer: 41
