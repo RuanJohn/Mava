@@ -37,6 +37,8 @@ def get_script_contents(
         system_run_file = "mava/systems/ppo/ff_ippo_tabular.py"
     elif system_name == "ff_ppo_central_tabular":
         system_run_file = "mava/systems/ppo/ff_ppo_central_tabular.py"
+    elif system_name == "ff_ippo_tabular_split":
+        system_run_file = "mava/systems/ppo/ff_ippo_tabular_split.py"
 
     system_run_seed = int(env_seed * 10 + system_seed)
 
@@ -58,13 +60,14 @@ system_names = [
     "ff_ppo_central",
     "ff_ippo",
     "ff_mappo",
-    "ff_ippo_tabular",
+    "ff_ippo_tabular"
+    "ff_ippo_tabular_split",
     "ff_ppo_central_tabular",
 ]
 
 
 def should_run(system_name: str, task_name: str) -> bool:
-    if system_name == "ff_ppo_central_tabular" or system_name == "ff_ippo_tabular":
+    if system_name == "ff_ippo_tabular_split" or system_name == "ff_ippo_tabular":
         return True
     return False
 
