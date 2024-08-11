@@ -201,6 +201,28 @@ def make_ff_tabular_eval_act_fn(actor_apply_fn: ActorApply, config: DictConfig) 
     return eval_act_fn
 
 
+def make_indep_ff_tabular_eval_act_fn(actor_apply_fn: ActorApply, config: DictConfig) -> EvalActFn:
+    """Makes an act function that conforms to the evaluator API given a standard
+    feed forward mava actor network."""
+
+    def eval_act_fn(
+        params: FrozenDict, timestep: TimeStep, key: PRNGKey, actor_state: ActorState
+    ) -> Tuple[Action, Dict]:
+        batch_size = timestep.observation.agents_view.shape[0]
+        agent_actions = jnp.zeros((batch_size, config.system.num_agents), dtype=jnp.int32)
+
+        for agent_idx in range(config.system.num_agents):
+            key, act_key = jax.random.split(key)
+            agent_params = tree.map(lambda x, agent_idx=agent_idx: x[agent_idx], params)
+            pi = actor_apply_fn(agent_params, batch_size)
+            action = pi.mode() if config.arch.evaluation_greedy else pi.sample(seed=act_key)
+            agent_actions = agent_actions.at[:, agent_idx].set(action)
+
+        return agent_actions, {}
+
+    return eval_act_fn
+
+
 def make_rec_eval_act_fn(actor_apply_fn: RecActorApply, config: DictConfig) -> EvalActFn:
     """Makes an act function that conforms to the evaluator API given a standard
     recurrent mava actor network."""

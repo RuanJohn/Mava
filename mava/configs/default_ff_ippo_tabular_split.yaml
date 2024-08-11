@@ -1,0 +1,7 @@
+defaults:
+  - logger: ff_ippo_tabular_split
+  - arch: anakin
+  - system: ppo/ff_ippo
+  - network: mlp  # [mlp, continuous_mlp, cnn]
+  - env: generalised-matrax # [cleaner, connector, gigastep, lbf, mabrax, matrax, rware, smax]
+  - _self_
