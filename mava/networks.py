@@ -41,10 +41,7 @@ class TabularPolicy(nn.Module):
             "policy_logits", nn.initializers.zeros, (self.num_agent, self.num_actions)
         )
 
-    def __call__(self, observation: Observation) -> tfd.Distribution:
-        batch_size = observation.agents_view.shape[0]
-        del observation
-
+    def __call__(self, batch_size: int) -> tfd.Distribution:
         # Repeat the policy_logits for each item in the batch
         if self.num_agent > 1:
             batched_logits = jnp.repeat(self.policy_logits[None, :, :], batch_size, axis=0)

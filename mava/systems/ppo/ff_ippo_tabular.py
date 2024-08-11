@@ -29,7 +29,7 @@ from omegaconf import DictConfig, OmegaConf
 from optax._src.base import OptState
 from rich.pretty import pprint
 
-from mava.evaluator import get_eval_fn, make_ff_eval_act_fn
+from mava.evaluator import get_eval_fn, make_ff_tabular_eval_act_fn
 from mava.networks import FeedForwardActor as Actor
 from mava.networks import TabularPolicy
 from mava.systems.ppo.types import LearnerState, OptStates, Params, PPOTransition
@@ -84,7 +84,8 @@ def get_learner_fn(
 
             # SELECT ACTION
             key, policy_key = jax.random.split(key)
-            actor_policy = actor_apply_fn(params.actor_params, last_timestep.observation)
+            batch_size = last_timestep.observation.agents_view.shape[0]
+            actor_policy = actor_apply_fn(params.actor_params, batch_size)
 
             action = actor_policy.sample(seed=policy_key)
             log_prob = actor_policy.log_prob(action)
@@ -93,19 +94,15 @@ def get_learner_fn(
             env_state, timestep = jax.vmap(env.step, in_axes=(0, 0))(env_state, action)
 
             # LOG EPISODE METRICS
-            done = tree.map(
-                lambda x: jnp.repeat(x, config.system.num_agents).reshape(config.arch.num_envs, -1),
-                timestep.last(),
-            )
             info = timestep.extras["episode_metrics"]
 
             transition = PPOTransition(
-                done,
+                None,
                 action,
                 None,
                 timestep.reward,
                 log_prob,
-                last_timestep.observation,
+                None,
                 info,
             )
             learner_state = LearnerState(params, opt_states, key, env_state, timestep)
@@ -140,7 +137,8 @@ def get_learner_fn(
                 ) -> Tuple:
                     """Calculate the actor loss."""
                     # RERUN NETWORK
-                    actor_policy = actor_apply_fn(actor_params, traj_batch.obs)
+                    batch_size = traj_batch.action.shape[0]
+                    actor_policy = actor_apply_fn(actor_params, batch_size)
                     log_prob = actor_policy.log_prob(traj_batch.action)
 
                     # CALCULATE ACTOR LOSS
@@ -284,7 +282,7 @@ def learner_setup(
     config.env.mean_payoff = float(jnp.mean(env.payoff_matrix))
 
     # PRNG keys.
-    key, actor_net_key, critic_net_key = keys
+    key, actor_net_key, _ = keys
 
     # Define network and optimiser.
     actor_network = TabularPolicy(num_agent=config.system.num_agents, num_actions=env.action_dim)
@@ -295,12 +293,10 @@ def learner_setup(
         optax.clip_by_global_norm(config.system.max_grad_norm),
         optax.adam(actor_lr, eps=1e-5),
     )
-    # Initialise observation with obs of all agents.
-    obs = env.observation_spec().generate_value()
-    init_x = tree.map(lambda x: x[jnp.newaxis, ...], obs)
 
     # Initialise actor params and optimiser state.
-    actor_params = actor_network.init(actor_net_key, init_x)
+    # Init with batch size 1
+    actor_params = actor_network.init(actor_net_key, 1)
     actor_opt_state = actor_optim.init(actor_params)
 
     # Pack params.
@@ -380,7 +376,7 @@ def run_experiment(_config: DictConfig) -> float:
     # Setup evaluator.
     # One key per device for evaluation.
     eval_keys = jax.random.split(key_e, n_devices)
-    eval_act_fn = make_ff_eval_act_fn(actor_network.apply, config)
+    eval_act_fn = make_ff_tabular_eval_act_fn(actor_network.apply, config)
     evaluator = get_eval_fn(eval_env, eval_act_fn, config, absolute_metric=False)
 
     # Calculate total timesteps.
