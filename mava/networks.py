@@ -28,13 +28,27 @@ from mava.distributions import (
     MaskedEpsGreedyDistribution,
     TanhTransformedDistribution,
 )
-from mava.types import (
-    Observation,
-    ObservationGlobalState,
-    RNNGlobalObservation,
-    RNNObservation,
-)
+from mava.types import Observation, ObservationGlobalState, RNNGlobalObservation, RNNObservation
 from mava.utils.centralised_controller import compute_joint_action_mask, get_all_action_combinations
+
+
+class TabularPolicy(nn.Module):
+    num_agent: int
+    num_actions: int
+
+    def setup(self) -> None:
+        self.policy_logits = self.param(
+            "policy_logits", nn.initializers.zeros, (self.num_agent, self.num_actions)
+        )
+
+    def __call__(self, observation: Observation) -> tfd.Distribution:
+        batch_size = observation.agents_view.shape[0]
+        del observation
+
+        # Repeat the policy_logits for each item in the batch
+        batched_logits = jnp.repeat(self.policy_logits[None, :, :], batch_size, axis=0)
+
+        return IdentityTransformation(distribution=tfd.Categorical(logits=batched_logits))
 
 
 class MLPTorso(nn.Module):
