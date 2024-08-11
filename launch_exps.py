@@ -33,6 +33,10 @@ def get_script_contents(
         system_run_file = "mava/systems/ppo/ff_ippo.py"
     elif system_name == "ff_mappo":
         system_run_file = "mava/systems/ppo/ff_mappo.py"
+    elif system_name == "ff_ippo_tabular":
+        system_run_file = "mava/systems/ppo/ff_ippo_tabular.py"
+    elif system_name == "ff_ppo_central_tabular":
+        system_run_file = "mava/systems/ppo/ff_ppo_central_tabular.py"
 
     system_run_seed = int(env_seed * 10 + system_seed)
 
@@ -50,9 +54,19 @@ def get_script_contents(
 num_agents = [2, 3, 4, 5, 6, 7]
 env_seeds = [41, 42, 43, 44, 45, 46, 47, 48, 49, 50]
 system_seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-system_names = ["ff_ppo_central", "ff_ippo", "ff_mappo"]
+system_names = [
+    "ff_ppo_central",
+    "ff_ippo",
+    "ff_mappo",
+    "ff_ippo_tabular",
+    "ff_ppo_central_tabular",
+]
 
-envs_run = ["matrax-3-ag-4-act", "matrax-2-ag-4-act"]
+
+def should_run(system_name: str, task_name: str) -> bool:
+    if system_name == "ff_ppo_central_tabular" or system_name == "ff_ippo_tabular":
+        return True
+    return False
 
 
 def make_task_name(num_agents: int) -> str:
@@ -68,10 +82,7 @@ if __name__ == "__main__":
                 for system_seed in system_seeds:
                     task_name = make_task_name(num_agent)
 
-                    if system_name == "ff_ppo_central" and task_name in envs_run:
-                        continue
-
-                    else:
+                    if should_run(system_name, task_name):
                         logging.info(f"Running experiment {system_name} - {task_name}")
 
                         script_contents = get_script_contents(
