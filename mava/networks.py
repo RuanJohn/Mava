@@ -46,7 +46,10 @@ class TabularPolicy(nn.Module):
         del observation
 
         # Repeat the policy_logits for each item in the batch
-        batched_logits = jnp.repeat(self.policy_logits[None, :, :], batch_size, axis=0)
+        if self.num_agent > 1:
+            batched_logits = jnp.repeat(self.policy_logits[None, :, :], batch_size, axis=0)
+        else:
+            batched_logits = jnp.repeat(self.policy_logits, batch_size, axis=0)
 
         return IdentityTransformation(distribution=tfd.Categorical(logits=batched_logits))
 
