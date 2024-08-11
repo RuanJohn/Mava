@@ -31,7 +31,6 @@ from rich.pretty import pprint
 
 from mava.evaluator import get_eval_fn, make_ff_eval_act_fn
 from mava.networks import FeedForwardActor as Actor
-from mava.networks import FeedForwardValueNet as Critic
 from mava.networks import TabularPolicy
 from mava.systems.ppo.types import LearnerState, OptStates, Params, PPOTransition
 from mava.types import ActorApply, CriticApply, ExperimentOutput, LearnerFn, MarlEnv
@@ -56,8 +55,8 @@ def get_learner_fn(
 ) -> LearnerFn[LearnerState]:
     """Get the learner function."""
     # Get apply and update functions for actor and critic networks.
-    actor_apply_fn, critic_apply_fn = apply_fns
-    actor_update_fn, critic_update_fn = update_fns
+    actor_apply_fn = apply_fns
+    actor_update_fn = update_fns
 
     def _update_step(learner_state: LearnerState, _: Any) -> Tuple[LearnerState, Tuple]:
         """A single update of the network.
@@ -86,7 +85,6 @@ def get_learner_fn(
             # SELECT ACTION
             key, policy_key = jax.random.split(key)
             actor_policy = actor_apply_fn(params.actor_params, last_timestep.observation)
-            value = critic_apply_fn(params.critic_params, last_timestep.observation)
 
             action = actor_policy.sample(seed=policy_key)
             log_prob = actor_policy.log_prob(action)
@@ -104,7 +102,7 @@ def get_learner_fn(
             transition = PPOTransition(
                 done,
                 action,
-                value,
+                None,
                 timestep.reward,
                 log_prob,
                 last_timestep.observation,
@@ -120,36 +118,9 @@ def get_learner_fn(
 
         # CALCULATE ADVANTAGE
         params, opt_states, key, env_state, last_timestep = learner_state
-        last_val = critic_apply_fn(params.critic_params, last_timestep.observation)
 
-        def _calculate_gae(
-            traj_batch: PPOTransition, last_val: chex.Array
-        ) -> Tuple[chex.Array, chex.Array]:
-            """Calculate the GAE."""
-
-            def _get_advantages(gae_and_next_value: Tuple, transition: PPOTransition) -> Tuple:
-                """Calculate the GAE for a single transition."""
-                gae, next_value = gae_and_next_value
-                done, value, reward = (
-                    transition.done,
-                    transition.value,
-                    transition.reward,
-                )
-                gamma = config.system.gamma
-                delta = reward + gamma * next_value * (1 - done) - value
-                gae = delta + gamma * config.system.gae_lambda * (1 - done) * gae
-                return (gae, value), gae
-
-            _, advantages = jax.lax.scan(
-                _get_advantages,
-                (jnp.zeros_like(last_val), last_val),
-                traj_batch,
-                reverse=True,
-                unroll=16,
-            )
-            return advantages, advantages + traj_batch.value
-
-        advantages, targets = _calculate_gae(traj_batch, last_val)
+        # Broadcast the reward
+        advantages, targets = traj_batch.reward - jnp.array(config.env.mean_payoff), None
 
         def _update_epoch(update_state: Tuple, _: Any) -> Tuple:
             """Update the network for a single epoch."""
@@ -164,7 +135,7 @@ def get_learner_fn(
                     actor_params: FrozenDict,
                     actor_opt_state: OptState,
                     traj_batch: PPOTransition,
-                    gae: chex.Array,
+                    advantage: chex.Array,
                     key: chex.PRNGKey,
                 ) -> Tuple:
                     """Calculate the actor loss."""
@@ -174,15 +145,14 @@ def get_learner_fn(
 
                     # CALCULATE ACTOR LOSS
                     ratio = jnp.exp(log_prob - traj_batch.log_prob)
-                    gae = (gae - gae.mean()) / (gae.std() + 1e-8)
-                    loss_actor1 = ratio * gae
+                    loss_actor1 = ratio * advantage
                     loss_actor2 = (
                         jnp.clip(
                             ratio,
                             1.0 - config.system.clip_eps,
                             1.0 + config.system.clip_eps,
                         )
-                        * gae
+                        * advantage
                     )
                     loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
                     loss_actor = loss_actor.mean()
@@ -191,27 +161,6 @@ def get_learner_fn(
 
                     total_loss_actor = loss_actor - config.system.ent_coef * entropy
                     return total_loss_actor, (loss_actor, entropy)
-
-                def _critic_loss_fn(
-                    critic_params: FrozenDict,
-                    critic_opt_state: OptState,
-                    traj_batch: PPOTransition,
-                    targets: chex.Array,
-                ) -> Tuple:
-                    """Calculate the critic loss."""
-                    # RERUN NETWORK
-                    value = critic_apply_fn(critic_params, traj_batch.obs)
-
-                    # CALCULATE VALUE LOSS
-                    value_pred_clipped = traj_batch.value + (value - traj_batch.value).clip(
-                        -config.system.clip_eps, config.system.clip_eps
-                    )
-                    value_losses = jnp.square(value - targets)
-                    value_losses_clipped = jnp.square(value_pred_clipped - targets)
-                    value_loss = 0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()
-
-                    critic_total_loss = config.system.vf_coef * value_loss
-                    return critic_total_loss, (value_loss)
 
                 # CALCULATE ACTOR LOSS
                 key, entropy_key = jax.random.split(key)
@@ -222,15 +171,6 @@ def get_learner_fn(
                     traj_batch,
                     advantages,
                     entropy_key,
-                )
-
-                # CALCULATE CRITIC LOSS
-                critic_grad_fn = jax.value_and_grad(_critic_loss_fn, has_aux=True)
-                critic_loss_info, critic_grads = critic_grad_fn(
-                    params.critic_params,
-                    opt_states.critic_opt_state,
-                    traj_batch,
-                    targets,
                 )
 
                 # Compute the parallel mean (pmean) over the batch.
@@ -245,38 +185,22 @@ def get_learner_fn(
                     (actor_grads, actor_loss_info), axis_name="device"
                 )
 
-                critic_grads, critic_loss_info = jax.lax.pmean(
-                    (critic_grads, critic_loss_info), axis_name="batch"
-                )
-                # pmean over devices.
-                critic_grads, critic_loss_info = jax.lax.pmean(
-                    (critic_grads, critic_loss_info), axis_name="device"
-                )
-
                 # UPDATE ACTOR PARAMS AND OPTIMISER STATE
                 actor_updates, actor_new_opt_state = actor_update_fn(
                     actor_grads, opt_states.actor_opt_state
                 )
                 actor_new_params = optax.apply_updates(params.actor_params, actor_updates)
 
-                # UPDATE CRITIC PARAMS AND OPTIMISER STATE
-                critic_updates, critic_new_opt_state = critic_update_fn(
-                    critic_grads, opt_states.critic_opt_state
-                )
-                critic_new_params = optax.apply_updates(params.critic_params, critic_updates)
-
                 # PACK NEW PARAMS AND OPTIMISER STATE
-                new_params = Params(actor_new_params, critic_new_params)
-                new_opt_state = OptStates(actor_new_opt_state, critic_new_opt_state)
+                new_params = Params(actor_new_params, params.critic_params)
+                new_opt_state = OptStates(actor_new_opt_state, opt_states.critic_opt_state)
 
                 # PACK LOSS INFO
-                total_loss = actor_loss_info[0] + critic_loss_info[0]
-                value_loss = critic_loss_info[1]
+                total_loss = actor_loss_info[0]
                 actor_loss = actor_loss_info[1][0]
                 entropy = actor_loss_info[1][1]
                 loss_info = {
                     "total_loss": total_loss,
-                    "value_loss": value_loss,
                     "actor_loss": actor_loss,
                     "entropy": entropy,
                 }
@@ -363,24 +287,14 @@ def learner_setup(
     key, actor_net_key, critic_net_key = keys
 
     # Define network and optimiser.
-    critic_torso = hydra.utils.instantiate(config.network.critic_network.pre_torso)
-
-    # actor_network = Actor(torso=actor_torso, action_head=actor_action_head)
     actor_network = TabularPolicy(num_agent=config.system.num_agents, num_actions=env.action_dim)
-    critic_network = Critic(torso=critic_torso)
 
     actor_lr = make_learning_rate(config.system.actor_lr, config)
-    critic_lr = make_learning_rate(config.system.critic_lr, config)
 
     actor_optim = optax.chain(
         optax.clip_by_global_norm(config.system.max_grad_norm),
         optax.adam(actor_lr, eps=1e-5),
     )
-    critic_optim = optax.chain(
-        optax.clip_by_global_norm(config.system.max_grad_norm),
-        optax.adam(critic_lr, eps=1e-5),
-    )
-
     # Initialise observation with obs of all agents.
     obs = env.observation_spec().generate_value()
     init_x = tree.map(lambda x: x[jnp.newaxis, ...], obs)
@@ -389,16 +303,12 @@ def learner_setup(
     actor_params = actor_network.init(actor_net_key, init_x)
     actor_opt_state = actor_optim.init(actor_params)
 
-    # Initialise critic params and optimiser state.
-    critic_params = critic_network.init(critic_net_key, init_x)
-    critic_opt_state = critic_optim.init(critic_params)
-
     # Pack params.
-    params = Params(actor_params, critic_params)
+    params = Params(actor_params, None)
 
     # Pack apply and update functions.
-    apply_fns = (actor_network.apply, critic_network.apply)
-    update_fns = (actor_optim.update, critic_optim.update)
+    apply_fns = actor_network.apply
+    update_fns = actor_optim.update
 
     # Get batched iterated update and replicate it to pmap it over cores.
     learn = get_learner_fn(env, apply_fns, update_fns, config)
@@ -431,7 +341,7 @@ def learner_setup(
 
     # Define params to be replicated across devices and batches.
     key, step_keys = jax.random.split(key)
-    opt_states = OptStates(actor_opt_state, critic_opt_state)
+    opt_states = OptStates(actor_opt_state, None)
     replicate_learner = (params, opt_states, step_keys)
 
     # Duplicate learner for update_batch_size.
