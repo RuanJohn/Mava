@@ -57,19 +57,17 @@ num_agents = [2, 3, 4, 5, 6, 7]
 env_seeds = [41, 42, 43, 44, 45, 46, 47, 48, 49, 50]
 system_seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 system_names = [
-    "ff_ppo_central",
-    "ff_ippo",
-    "ff_mappo",
-    "ff_ippo_tabular"
+    "ff_ippo_tabular",
     "ff_ippo_tabular_split",
     "ff_ppo_central_tabular",
+    "ff_ippo",
+    "ff_mappo",
+    "ff_ppo_central",
 ]
 
 
 def should_run(system_name: str, task_name: str) -> bool:
-    if system_name == "ff_ippo_tabular_split" or system_name == "ff_ippo_tabular":
-        return True
-    return False
+    return True
 
 
 def make_task_name(num_agents: int) -> str:
