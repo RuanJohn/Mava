@@ -88,6 +88,7 @@ if __name__ == "__main__":
                         system_name=system_name,
                         env_name="smax",
                         task_name=task_name,
+                        seed_string=seed_string
                     )
                     with open("run.sh", "w") as f:
                         f.write(script_contents)
