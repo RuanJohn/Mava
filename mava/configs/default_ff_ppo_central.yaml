@@ -3,5 +3,5 @@ defaults:
   - arch: anakin
   - system: ppo/ff_ppo_central
   - network: mlp  # [mlp, continuous_mlp, cnn]
-  - env: generalised-matrax # [cleaner, connector, gigastep, lbf, mabrax, matrax, rware, smax]
+  - env: lbf # [cleaner, connector, gigastep, lbf, mabrax, matrax, rware, smax]
   - _self_
