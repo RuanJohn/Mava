@@ -9,7 +9,7 @@ use_neptune: True  # Whether to log to neptune.ai.
 # --- Other logger kwargs ---
 kwargs:
   neptune_project: ruan-marl-masters/centralised-marl-msc
-  neptune_tag: [cent-experiments-smax]
+  neptune_tag: [cent-experiments-rware]
   detailed_neptune_logging: True  # having mean/std/min/max can clutter neptune so we make it optional
   json_path: ~ # If set, json files will be logged to a set path so that multiple experiments can
     # write to the same json file for easy downstream aggregation and plotting with marl-eval.
