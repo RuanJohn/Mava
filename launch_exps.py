@@ -65,6 +65,7 @@ system_names = [
     "ff_ippo",
     "ff_mappo",
 ]
+ENV_NAME = "rware"
 
 
 def should_run(system_name: str, task_name: str) -> bool:
@@ -86,7 +87,7 @@ if __name__ == "__main__":
 
                     script_contents = get_script_contents(
                         system_name=system_name,
-                        env_name="smax",
+                        env_name=ENV_NAME,
                         task_name=task_name,
                         seed_string=seed_string,
                     )
