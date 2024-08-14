@@ -17,13 +17,6 @@ import subprocess
 import textwrap
 import time
 
-seed_strings = [
-    "0,1,2",
-    "3,4,5",
-    "6,7,8,9",
-]
-
-
 def get_script_contents(
     system_name: str,
     env_name: int,
@@ -55,15 +48,22 @@ def get_script_contents(
     return textwrap.dedent(script)
 
 
+seed_strings = [
+    "0,1,2",
+    "3,4,5",
+    "6,7,8,9",
+]
+
 task_names = [
-    "smacv2_5_units",
-    "2s3z",
-    "5m_vs_6m",
+    "Climbing-stateless-v0",
 ]
 system_names = [
     "ff_ppo_central",
     "ff_ippo",
     "ff_mappo",
+    "ff_ippo_tabular",
+    "ff_ppo_central_tabular",
+    "ff_ippo_tabular_split",
 ]
 
 
@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
                     script_contents = get_script_contents(
                         system_name=system_name,
-                        env_name="smax",
+                        env_name="matrax",
                         task_name=task_name,
                         seed_string=seed_string
                     )
