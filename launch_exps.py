@@ -20,9 +20,9 @@ import time
 
 def get_netpune_tag(is_shadowed: bool) -> str:
     if is_shadowed:
-        return '["true-shadow-long-experiment-tpu-v4", "delete"]'
+        return '["true-shadow-long-experiment-tpu-v4"]'
     else:
-        return '["explore-long-experiment", "delete"]'
+        return '["explore-long-experiment"]'
 
 
 def get_script_contents(
