@@ -27,4 +27,4 @@ log_win_rate: False
 kwargs:
   keep_state: False
   time_limit: 1
-  generate_shadowed_payoffs: False
+  generate_shadowed_payoffs: True
