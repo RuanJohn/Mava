@@ -112,7 +112,7 @@ if __name__ == "__main__":
                     for num_action in num_actions:
                         for env_seed in env_seeds:
                             for system_seed in system_seeds:
-                                task_name = make_task_name(num_agent)
+                                task_name = make_task_name(num_agent, num_action)
 
                                 if should_run(system_name, task_name):
                                     logging.info(f"Running experiment {system_name} - {task_name}")
