@@ -15,9 +15,11 @@
 import abc
 import logging
 import os
+import subprocess
 import zipfile
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import ClassVar, Dict, List, Union
 
 import jax
@@ -27,10 +29,38 @@ from colorama import Fore, Style
 from jax import tree
 from jax.typing import ArrayLike
 from marl_eval.json_tools import JsonLogger as MarlEvalJsonLogger
+from neptune.types import GitRef
 from neptune.utils import stringify_unsupported
 from omegaconf import DictConfig
 from pandas.io.json._normalize import _simple_json_normalize as flatten_dict
 from tensorboard_logger import configure, log_value
+
+
+def get_repo_root() -> str:
+    current_path = Path(__file__).resolve().parent
+    while not (current_path / ".git").is_dir():
+        current_path = current_path.parent
+        if current_path == current_path.parent:  # reached root without finding .git
+            raise ValueError("Could not find repository root")
+    return str(current_path)
+
+
+def get_git_branch() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], universal_newlines=True
+        ).strip()
+    except subprocess.CalledProcessError:
+        return "Unknown"
+
+
+def get_git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], universal_newlines=True
+        ).strip()
+    except subprocess.CalledProcessError:
+        return "Unknown"
 
 
 class LogEvent(Enum):
@@ -154,7 +184,14 @@ class NeptuneLogger(BaseLogger):
         tags = list(cfg.logger.kwargs.neptune_tag)
         project = cfg.logger.kwargs.neptune_project
 
-        self.logger = neptune.init_run(project=project, tags=tags)
+        self.logger = neptune.init_run(
+            project=project,
+            tags=tags,
+            git_ref=GitRef(repository_path=get_repo_root()),
+        )
+
+        self.logger["git/current_branch"] = get_git_branch()
+        self.logger["git/commit_hash"] = get_git_commit()
 
         self.logger["config"] = stringify_unsupported(cfg)
         self.detailed_logging = cfg.logger.kwargs.detailed_neptune_logging
