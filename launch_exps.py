@@ -58,7 +58,7 @@ def get_script_contents(
     elif system_name == "ff_ippo_tabular_split":
         system_run_file = "mava/systems/ppo/ff_ippo_tabular_split.py"
 
-    neptune_tag = f"grid-plot-exp-{num_steps}"
+    neptune_tag = f'["grid-plot-exp-{num_steps}"]'
     num_updates, num_evals = get_eval_updates(num_steps)
 
     shadowed_str = "True" if is_shadowed else "False"
