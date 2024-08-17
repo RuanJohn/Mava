@@ -12,3 +12,4 @@ num_eval_episodes: 32 # Number of episodes to evaluate per evaluation.
 num_absolute_metric_eval_episodes: 320  # Number of episodes to evaluate the absolute metric (the final evaluation).
 absolute_metric: True # Whether the absolute metric should be computed. For more details
   # on the absolute metric please see: https://arxiv.org/abs/2209.10485
+log_actions: False # This will log the mean agent action at eval time if true.

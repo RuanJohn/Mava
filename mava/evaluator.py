@@ -126,6 +126,8 @@ def get_eval_fn(
             key, act_key = jax.random.split(key)
             action, actor_state = act_fn(params, ts, act_key, actor_state)
             env_state, ts = jax.vmap(env.step)(env_state, action)
+            if config.arch.log_actions:
+                ts.extras["episode_metrics"]["actions"] = action
 
             return (env_state, ts, key, actor_state), ts
 
@@ -134,6 +136,10 @@ def get_eval_fn(
             key, reset_key = jax.random.split(key)
             reset_keys = jax.random.split(reset_key, n_vmapped_envs)
             env_state, ts = jax.vmap(env.reset)(reset_keys)
+            if config.arch.log_actions:
+                ts.extras["episode_metrics"]["actions"] = jnp.zeros(
+                    (n_vmapped_envs, env.num_agents), dtype=jnp.int32
+                )
 
             step_state = env_state, ts, key, init_act_state
             _, timesteps = jax.lax.scan(_env_step, step_state, jnp.arange(env.time_limit))
@@ -154,6 +160,14 @@ def get_eval_fn(
         # So in evaluation we have num_envs parallel envs and loop enough times
         # so that we do at least `eval_episodes` number of episodes.
         _, metrics = jax.lax.scan(_episode, key, xs=None, length=episode_loops)
+
+        if config.arch.log_actions:
+            # Split the action logging so that the action is logged for each agent
+            joint_actions = metrics["actions"]
+            for agent_idx in range(env.num_agents):
+                metrics[f"agent_{agent_idx}_action"] = joint_actions[:, agent_idx]
+            del metrics["actions"]
+
         metrics: Metrics = tree.map(lambda x: x.reshape(-1), metrics)  # flatten metrics
         return metrics
 
