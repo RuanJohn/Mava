@@ -19,18 +19,15 @@ import time
 from typing import Tuple
 
 
-def get_netpune_tag(is_shadowed: bool) -> str:
-    if is_shadowed:
-        return '["true-shadow-long-experiment-tpu-v4"]'
-    else:
-        return '["explore-long-experiment"]'
-
-
 def get_eval_updates(step_count: str) -> Tuple[int, int]:
     if step_count == "1M":
         return (165, 33)
-    if step_count == "5M":
+    elif step_count == "5M":
         return (815, 163)
+    elif step_count == "10M":
+        return (1630, 326)
+    elif step_count == "20M":
+        return (3255, 651)
 
 
 def get_script_contents(
@@ -79,18 +76,23 @@ def get_script_contents(
 
 
 is_shadowed_list = [True]
-num_steps = ["1M", "5M"]
+num_steps = [
+    # "1M",
+    # "5M",
+    "10M",
+    "20M",
+]
 num_agents = [2, 3, 4, 5, 6, 7]
 num_actions = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 env_seeds = [42]
 system_seeds = ["0,1,2,3,4"]
 system_names = [
-    # "ff_ippo_tabular",
+    "ff_ippo_tabular",
     # "ff_ippo_tabular_split",
     # "ff_ppo_central_tabular",
     # "ff_ippo",
     # "ff_mappo",
-    "ff_ppo_central",
+    # "ff_ppo_central",
 ]
 
 
