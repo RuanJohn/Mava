@@ -67,12 +67,12 @@ def save_to_csv(df, filename):
 def main():
     project_name = "ruan-marl-masters/centralised-marl-msc"
     api_token = os.getenv("NEPTUNE_API_TOKEN")
-    tag = "grid-plot-exp-1M"
+    tag = "grid-plot-exp-20M"
 
     df = fetch_neptune_data(project_name, api_token, tag)
 
     # Save the data to a CSV file
-    csv_filename = "1M_data_aggregated.csv"
+    csv_filename = "20M_data_aggregated.csv"
     save_to_csv(df, csv_filename)
 
 

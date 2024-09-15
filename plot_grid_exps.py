@@ -4,14 +4,27 @@ import pandas as pd
 import seaborn as sns
 
 
-def load_data(filename):
-    df = pd.read_csv(filename)
+def load_data(data_file_name, rename_algorithms=False):
+    df = pd.read_csv(data_file_name)
     df["num_agents"] = df["num_agents"].astype(int)
     df["num_actions"] = df["num_actions"].astype(int)
+
+    # rename ff_ppo_central_tabular to ppo_central
+    # rename ff_ippo_tabular to ippo
+    # rename ff_ippo_tabular_split to ippo
+    if rename_algorithms:
+        df["algorithm"] = df["algorithm"].replace(
+            {
+                "ff_ppo_central_tabular": "ppo_central",
+                "ff_ippo_tabular": "ippo",
+                "ff_ippo_tabular_split": "ippo",
+            }
+        )
+
     return df
 
 
-def create_plot(df):
+def create_plot(df, plot_file_name):
     if df.empty:
         print("No data to plot. The CSV file is empty.")
         return
@@ -67,7 +80,7 @@ def create_plot(df):
     plt.tight_layout()
 
     # Save the plot as a high-resolution PNG file
-    plt.savefig("1m_best_algorithm_heatmap.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"{plot_file_name}.png", dpi=300, bbox_inches="tight")
     print("Plot saved as 'best_algorithm_heatmap.png'")
 
     # Show the plot (optional, comment out if you don't want to display it)
@@ -75,9 +88,10 @@ def create_plot(df):
 
 
 def main():
-    filename = "1M_data_aggregated.csv"
-    df = load_data(filename)
-    create_plot(df)
+    data_file_name = "20M_data_aggregated.csv"
+    df = load_data(data_file_name, rename_algorithms=True)
+    plot_file_name = "20m_best_algorithm_heatmap"
+    create_plot(df, plot_file_name)
 
 
 if __name__ == "__main__":
