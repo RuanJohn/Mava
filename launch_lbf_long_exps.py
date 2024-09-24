@@ -58,7 +58,7 @@ def get_script_contents(
 task_names = [
     "2s-10x10-3p-3f",
     "15x15-3p-5f",
-    "15x15-3p-5f",
+    "15x15-4p-5f",
 ]
 system_names = [
     "ff_ppo_central",
@@ -68,7 +68,7 @@ system_names = [
 
 
 def should_run(system_name: str, task_name: str) -> bool:
-    if system_name == "ff_ppo_central" and task_name == "15x15-3p-5f":
+    if system_name == "ff_ppo_central" and task_name == "15x15-4p-5f":
         return True
     return False
 
