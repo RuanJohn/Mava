@@ -19,8 +19,8 @@ import time
 
 seed_strings = [
     "0,1,2",
-    # "3,4,5",
-    # "6,7,8,9",
+    "3,4,5",
+    "6,7,8,9",
 ]
 
 
@@ -65,10 +65,15 @@ system_names = [
     "ff_ippo",
     "ff_mappo",
 ]
+systems_to_run = [
+    # "ff_ppo_central",
+    "ff_ippo",
+    "ff_mappo",
+]
 
 
 def should_run(system_name: str, task_name: str) -> bool:
-    if system_name == "ff_ppo_central" and task_name == "tiny-4ag":
+    if system_name in systems_to_run and task_name == "tiny-4ag":
         return True
     return False
 
