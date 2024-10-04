@@ -22,6 +22,11 @@ seed_strings = [
     "3,4,5",
     "6,7,8,9",
 ]
+task_to_run = [
+    "smacv2_5_units",
+    "2s3z",
+    "5m_vs_6m",
+]
 
 
 def get_script_contents(
@@ -73,7 +78,7 @@ systems_to_run = [
 
 
 def should_run(system_name: str, task_name: str) -> bool:
-    if system_name in systems_to_run and task_name == "5m_vs_6m":
+    if system_name in systems_to_run and task_name in task_to_run:
         return True
     return False
 
