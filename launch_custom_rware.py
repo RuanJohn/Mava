@@ -68,9 +68,9 @@ def get_script_contents(
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    for system_name in exp_runner_details:
-        for task_name in exp_runner_details[system_name]:
-            seed_string = exp_runner_details[system_name][task_name]
+    for task_name in exp_runner_details:
+        for system_name in exp_runner_details[task_name]:
+            seed_string = exp_runner_details[task_name][system_name]
             logging.info(f"Running experiment {system_name} - {task_name}")
 
             script_contents = get_script_contents(
