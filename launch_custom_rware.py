@@ -28,11 +28,11 @@ import time
 # ]
 
 exp_runner_details = {
-    # "small-4ag": {
-    #     "ff_mappo": "2,3,4,5,6,7",
-    # },
+    "small-4ag": {
+        "ff_mappo": "8,9",
+    },
     "tiny-4ag": {
-        "ff_mappo": "2,3,4,5,6,7",
+        "ff_mappo": "8,9",
     },
     # "small-4ag": {
     #     "ff_mappo": "6,7,8,9",
