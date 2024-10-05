@@ -29,7 +29,10 @@ import time
 
 exp_runner_details = {
     "small-4ag": {
-        "ff_ippo": "3,4,5,6,7,8",
+        "ff_ippo": "9",
+    },
+    "tiny-4ag": {
+        "ff_ippo": "3,4,5,6,7",
     },
 }
 
