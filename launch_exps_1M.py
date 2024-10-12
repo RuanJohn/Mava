@@ -18,6 +18,25 @@ import textwrap
 import time
 from typing import Tuple
 
+system_seeds = ["1,2,3,4"]
+num_agents = [7]
+num_actions = [10]
+env_seeds = [42]
+system_names = [
+    # "ff_ippo_tabular",
+    # "ff_ippo_tabular_split",
+    "ff_ppo_central_tabular",
+    # "ff_ippo",
+    # "ff_mappo",
+    # "ff_ppo_central",
+]
+num_steps = [
+    "1M",
+    # "5M",
+    # "10M",
+    # "20M",
+]
+
 
 def get_eval_updates(step_count: str) -> Tuple[int, int]:
     if step_count == "1M":
@@ -76,24 +95,6 @@ def get_script_contents(
 
 
 is_shadowed_list = [True]
-num_steps = [
-    # "1M",
-    # "5M",
-    "10M",
-    "20M",
-]
-num_agents = [2, 3, 4, 5, 6, 7]
-num_actions = [2, 3, 4, 5, 6, 7, 8, 9, 10]
-env_seeds = [42]
-system_seeds = ["0,1,2,3,4"]
-system_names = [
-    "ff_ippo_tabular",
-    # "ff_ippo_tabular_split",
-    # "ff_ppo_central_tabular",
-    # "ff_ippo",
-    # "ff_mappo",
-    # "ff_ppo_central",
-]
 
 
 def should_run(system_name: str, task_name: str) -> bool:
