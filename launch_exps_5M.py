@@ -18,13 +18,13 @@ import textwrap
 import time
 from typing import Tuple
 
-system_seeds = ["1,2,3,4"]
-num_agents = [7]
-num_actions = [10]
+system_seeds = ["5", "6", "7", "8", "9"]
+num_agents = [2, 3, 4, 5, 6, 7]
+num_actions = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 env_seeds = [42]
 system_names = [
     # "ff_ippo_tabular",
-    # "ff_ippo_tabular_split",
+    "ff_ippo_tabular_split",
     "ff_ppo_central_tabular",
     # "ff_ippo",
     # "ff_mappo",
@@ -135,6 +135,7 @@ if __name__ == "__main__":
                                     try:
                                         subprocess.run(["./run.sh"], check=True)
                                         logging.info("Experiment launched successfully")
+                                        time.sleep(5)
 
                                     except subprocess.CalledProcessError as e:
                                         logging.error(f"Error launching the experiment: {e}")
