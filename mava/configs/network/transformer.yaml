@@ -1,0 +1,8 @@
+# --- Network params ---
+actor_network:
+  n_block: 2
+  n_embd: 128
+  n_head: 2
+
+use_rmsnorm: False
+use_swiglu: False

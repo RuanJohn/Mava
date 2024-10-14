@@ -1,0 +1,7 @@
+defaults:
+  - logger: mat
+  - arch: anakin
+  - system: mat/mat
+  - network: transformer
+  - env: matrax
+  - _self_
