@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os 
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
+
 import copy
 import time
 from typing import Any, Dict, Tuple
@@ -22,6 +25,7 @@ import hydra
 import jax
 import jax.numpy as jnp
 import optax
+import numpy as np
 from colorama import Fore, Style
 from flax.core.frozen_dict import FrozenDict
 from jax import tree
@@ -45,6 +49,7 @@ from mava.utils.logger import LogEvent, MavaLogger
 from mava.utils.total_timestep_checker import check_total_timesteps
 from mava.utils.training import make_learning_rate
 from mava.wrappers.episode_metrics import get_final_step_metrics
+from mava.utils.memory_logging import ContinuousGPUMonitor
 
 
 def get_actions_log_prob(
@@ -474,8 +479,9 @@ def run_experiment(_config: DictConfig) -> float:
         # Train.
         start_time = time.time()
 
-        learner_output = learn(learner_state)
-        jax.block_until_ready(learner_output)
+        with ContinuousGPUMonitor(interval=0.1) as learner_monitor:
+            learner_output = learn(learner_state)
+            jax.block_until_ready(learner_output)
 
         # Log the results of the training.
         elapsed_time = time.time() - start_time
@@ -483,6 +489,13 @@ def run_experiment(_config: DictConfig) -> float:
         episode_metrics, ep_completed = get_final_step_metrics(learner_output.episode_metrics)
         episode_metrics["steps_per_second"] = steps_per_rollout / elapsed_time
 
+        # Log the learner memory usage.
+        learner_gpu_memory = {}
+        for metric, data_values in learner_monitor.gpu_data.items():
+            learner_gpu_memory[f"{metric}/mean"] = np.mean(data_values)
+            learner_gpu_memory[f"{metric}/max"] = np.max(data_values)
+        logger.log(learner_gpu_memory, t, eval_step, LogEvent.ACT)
+        
         # Separately log timesteps, actoring metrics and training metrics.
         logger.log({"timestep": t}, t, eval_step, LogEvent.MISC)
         if ep_completed:  # only log episode metrics if an episode was completed in the rollout.
@@ -495,7 +508,18 @@ def run_experiment(_config: DictConfig) -> float:
         eval_keys = jnp.stack(eval_keys)
         eval_keys = eval_keys.reshape(n_devices, -1)
         # Evaluate.
-        eval_metrics = evaluator(trained_params, eval_keys, {})
+        with ContinuousGPUMonitor(interval=0) as eval_monitor:
+            time.sleep(3)
+            eval_metrics = evaluator(trained_params, eval_keys, {})
+            jax.block_until_ready(eval_metrics)
+
+        # Log the evaluator memory usage.
+        eval_gpu_memory = {}
+        for metric, data_values in eval_monitor.gpu_data.items():
+            eval_gpu_memory[f"{metric}/mean"] = np.mean(data_values)
+            eval_gpu_memory[f"{metric}/max"] = np.max(data_values)
+        logger.log(eval_gpu_memory, t, eval_step, LogEvent.EVAL)
+
         logger.log(eval_metrics, t, eval_step, LogEvent.EVAL)
         episode_return = jnp.mean(eval_metrics["episode_return"])
 
