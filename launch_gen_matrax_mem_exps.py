@@ -16,21 +16,6 @@ import logging
 import subprocess
 import textwrap
 import time
-from typing import Tuple
-
-
-def get_netpune_tag(is_shadowed: bool) -> str:
-    if is_shadowed:
-        return '["true-shadow-long-experiment-tpu-v4"]'
-    else:
-        return '["explore-long-experiment"]'
-
-
-def get_eval_updates(step_count: str) -> Tuple[int, int]:
-    if step_count == "1M":
-        return (165, 33)
-    if step_count == "5M":
-        return (815, 163)
 
 
 def get_script_contents(
@@ -40,7 +25,6 @@ def get_script_contents(
     task_name: str,
     num_agent: int,
     num_actions: int,
-    num_steps: str,
     is_shadowed: bool = False,
 ) -> str:
     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -58,8 +42,7 @@ def get_script_contents(
     elif system_name == "ff_ippo_tabular_split":
         system_run_file = "mava/systems/ppo/ff_ippo_tabular_split.py"
 
-    neptune_tag = f"grid-plot-exp-{num_steps}"
-    num_updates, num_evals = get_eval_updates(num_steps)
+    num_updates, num_evals = 6, 3
 
     shadowed_str = "True" if is_shadowed else "False"
 
@@ -71,7 +54,6 @@ def get_script_contents(
         env.scenario.task_name={task_name} env.scenario.task_config.num_agents={num_agent} \\
         env.scenario.task_config.num_actions={num_actions} \\
         env.scenario.task_config.key_integer={env_seed} \\
-        logger.kwargs.neptune_tag='{neptune_tag}' \\
         env.kwargs.generate_shadowed_payoffs={shadowed_str} \\
         """
 
@@ -79,16 +61,15 @@ def get_script_contents(
 
 
 is_shadowed_list = [True]
-num_steps = ["1M", "5M"]
 num_agents = [2, 3, 4, 5, 6, 7]
 num_actions = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 env_seeds = [42]
-system_seeds = ["0,1,2,3,4"]
+system_seeds = ["0"]
 system_names = [
     # "ff_ippo_tabular",
-    # "ff_ippo_tabular_split",
-    # "ff_ppo_central_tabular",
-    # "ff_ippo",
+    "ff_ippo_tabular_split",
+    "ff_ppo_central_tabular",
+    "ff_ippo",
     # "ff_mappo",
     "ff_ppo_central",
 ]
@@ -106,32 +87,31 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     for is_shadowed in is_shadowed_list:
-        for num_step in num_steps:
-            for system_name in system_names:
-                for num_agent in num_agents:
-                    for num_action in num_actions:
-                        for env_seed in env_seeds:
-                            for system_seed in system_seeds:
-                                task_name = make_task_name(num_agent)
+        for system_name in system_names:
+            for num_agent in num_agents:
+                for num_action in num_actions:
+                    for env_seed in env_seeds:
+                        for system_seed in system_seeds:
+                            task_name = make_task_name(num_agent, num_action)
 
-                                if should_run(system_name, task_name):
-                                    logging.info(f"Running experiment {system_name} - {task_name}")
+                            if should_run(system_name, task_name):
+                                logging.info(f"Running experiment {system_name} - {task_name}")
 
-                                    script_contents = get_script_contents(
-                                        system_name=system_name,
-                                        env_seed=env_seed,
-                                        system_seed=system_seed,
-                                        task_name=task_name,
-                                        num_agent=num_agent,
-                                        is_shadowed=is_shadowed,
-                                        num_actions=num_action,
-                                        num_steps=num_step,
-                                    )
-                                    with open("run.sh", "w") as f:
-                                        f.write(script_contents)
-                                    try:
-                                        subprocess.run(["./run.sh"], check=True)
-                                        logging.info("Experiment launched successfully")
+                                script_contents = get_script_contents(
+                                    system_name=system_name,
+                                    env_seed=env_seed,
+                                    system_seed=system_seed,
+                                    task_name=task_name,
+                                    num_agent=num_agent,
+                                    is_shadowed=is_shadowed,
+                                    num_actions=num_action,
+                                )
+                                with open("run.sh", "w") as f:
+                                    f.write(script_contents)
+                                try:
+                                    subprocess.run(["./run.sh"], check=True)
+                                    logging.info("Experiment launched successfully")
+                                    time.sleep(1)
 
-                                    except subprocess.CalledProcessError as e:
-                                        logging.error(f"Error launching the experiment: {e}")
+                                except subprocess.CalledProcessError as e:
+                                    logging.error(f"Error launching the experiment: {e}")
