@@ -111,7 +111,7 @@ if __name__ == "__main__":
                                 try:
                                     subprocess.run(["./run.sh"], check=True)
                                     logging.info("Experiment launched successfully")
-                                    time.sleep(1)
+                                    time.sleep(5)
 
                                 except subprocess.CalledProcessError as e:
                                     logging.error(f"Error launching the experiment: {e}")
