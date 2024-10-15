@@ -48,7 +48,7 @@ def get_script_contents(
     elif system_name == "ff_ippo_tabular_split":
         system_run_file = "mava/systems/ppo/ff_ippo_tabular_split.py"
 
-    num_updates, num_evals = 6, 3
+    num_updates, num_evals = 12, 6
     
     script = f"""\
         #!/bin/bash
