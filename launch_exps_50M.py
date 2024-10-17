@@ -18,13 +18,12 @@ import textwrap
 import time
 from typing import Tuple
 
-system_seeds = ["5", "6"]
-system_seeds = ["7", "8"]
-system_seeds = ["9"]
+system_seeds = ["5", "6", "7", "8", "9"]
+# system_seeds = ["0", "1", "2", "3", "4"]
 
 agent_action_pairs = [
     [5, 5],
-    [5, 6],
+    # [5, 6],
     # [6, 4],
     # [6, 5],
     # [6, 6],
