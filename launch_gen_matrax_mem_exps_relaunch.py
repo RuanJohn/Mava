@@ -68,11 +68,29 @@ system_seeds = ["0"]
 system_names = [
     # "ff_ippo_tabular",
     # "ff_ippo_tabular_split",
-    "ff_ppo_central_tabular",
+    # "ff_ppo_central_tabular",
     # "ff_ippo",
     # "ff_mappo",
     "ff_ppo_central",
 ]
+
+# agent_action_pairs = {
+#      "ff_ppo_central_tabular": [
+#          [6, 9], [6, 10], [7, 7], [7, 8], [7, 9], [7, 10],
+#      ],
+#      "ff_ppo_central": [
+#         [6, 8], [6, 9], [6, 10], [7, 6], [7, 7], [7, 8], [7, 9], [7, 10],
+#      ]
+# }
+
+agent_action_pairs = {
+    #  "ff_ppo_central_tabular": [
+    #      [7,10],
+    #  ],
+     "ff_ppo_central": [
+        [7, 8],
+     ]
+}
 
 
 def should_run(system_name: str, task_name: str) -> bool:
@@ -88,30 +106,31 @@ if __name__ == "__main__":
 
     for is_shadowed in is_shadowed_list:
         for system_name in system_names:
-            for num_agent in num_agents:
-                for num_action in num_actions:
-                    for env_seed in env_seeds:
-                        for system_seed in system_seeds:
-                            task_name = make_task_name(num_agent, num_action)
+            for pair in agent_action_pairs[system_name]:
+                num_agent = pair[0]
+                num_action = pair[1]
+                for env_seed in env_seeds:
+                    for system_seed in system_seeds:
+                        task_name = make_task_name(num_agent, num_action)
 
-                            if should_run(system_name, task_name):
-                                logging.info(f"Running experiment {system_name} - {task_name}")
+                        if should_run(system_name, task_name):
+                            logging.info(f"Running experiment {system_name} - {task_name}")
 
-                                script_contents = get_script_contents(
-                                    system_name=system_name,
-                                    env_seed=env_seed,
-                                    system_seed=system_seed,
-                                    task_name=task_name,
-                                    num_agent=num_agent,
-                                    is_shadowed=is_shadowed,
-                                    num_actions=num_action,
-                                )
-                                with open("run.sh", "w") as f:
-                                    f.write(script_contents)
-                                try:
-                                    subprocess.run(["./run.sh"], check=True)
-                                    logging.info("Experiment launched successfully")
-                                    time.sleep(5)
+                            script_contents = get_script_contents(
+                                system_name=system_name,
+                                env_seed=env_seed,
+                                system_seed=system_seed,
+                                task_name=task_name,
+                                num_agent=num_agent,
+                                is_shadowed=is_shadowed,
+                                num_actions=num_action,
+                            )
+                            with open("run.sh", "w") as f:
+                                f.write(script_contents)
+                            try:
+                                subprocess.run(["./run.sh"], check=True)
+                                logging.info("Experiment launched successfully")
+                                time.sleep(5)
 
-                                except subprocess.CalledProcessError as e:
-                                    logging.error(f"Error launching the experiment: {e}")
+                            except subprocess.CalledProcessError as e:
+                                logging.error(f"Error launching the experiment: {e}")
