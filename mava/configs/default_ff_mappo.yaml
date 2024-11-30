@@ -1,7 +1,0 @@
-defaults:
-  - logger: ff_mappo
-  - arch: anakin
-  - system: ppo/ff_mappo
-  - network: mlp  # [mlp, continuous_mlp, cnn]
-  - env: generalised-matrax  # [cleaner, connector, gigastep, lbf, mabrax, matrax, rware, smax]
-  - _self_

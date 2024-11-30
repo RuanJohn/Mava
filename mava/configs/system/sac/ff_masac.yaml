@@ -35,3 +35,5 @@ gamma: 0.99  # discount factor
 autotune: True  # whether to autotune alpha
 target_entropy_scale: 5.0  # scale factor for target entropy (when auto-tuning)
 init_alpha: 0.1  # initial entropy value when not using autotune
+
+is_central_controller: False # Whether the system is a central controller, ie CTCE.

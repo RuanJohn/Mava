@@ -183,10 +183,14 @@ class NeptuneLogger(BaseLogger):
     def __init__(self, cfg: DictConfig, unique_token: str) -> None:
         tags = list(cfg.logger.kwargs.neptune_tag)
         project = cfg.logger.kwargs.neptune_project
+        mode = (
+            "async" if cfg.arch.architecture_name == "anakin" else "sync"
+        )  # async logging leads to deadlocks in sebulba
 
         self.logger = neptune.init_run(
             project=project,
             tags=tags,
+            mode=mode,
             git_ref=GitRef(repository_path=get_repo_root()),
         )
 
@@ -212,6 +216,7 @@ class NeptuneLogger(BaseLogger):
         if not self.detailed_logging and not is_main_metric:
             return
 
+        value = value.item() if isinstance(value, (jax.Array, np.ndarray)) else value
         self.logger[f"{event.value}/{key}"].log(value, step=step)
 
     def stop(self) -> None:
@@ -333,7 +338,7 @@ class ConsoleLogger(BaseLogger):
         for value in data.values():
             value = value.item() if isinstance(value, jax.Array) else value
             values.append(f"{value:.3f}" if isinstance(value, float) else str(value))
-        log_str = " | ".join([f"{k}: {v}" for k, v in zip(keys, values)])
+        log_str = " | ".join([f"{k}: {v}" for k, v in zip(keys, values, strict=True)])
 
         self.logger.info(
             f"{colour}{Style.BRIGHT}{event.value.upper()} - {log_str}{Style.RESET_ALL}"
@@ -378,7 +383,7 @@ def get_logger_path(config: DictConfig, logger_type: str) -> str:
 
 def describe(x: ArrayLike) -> Union[Dict[str, ArrayLike], ArrayLike]:
     """Generate summary statistics for an array of metrics (mean, std, min, max)."""
-    if not isinstance(x, jax.Array) or x.size <= 1:
+    if not isinstance(x, (jax.Array, np.ndarray)) or x.ndim == 0:
         return x
 
     # np instead of jnp because we don't jit here
