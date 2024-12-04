@@ -590,15 +590,32 @@ def hydra_entry_point(cfg: DictConfig) -> float:
     # Allow dynamic attributes.
     OmegaConf.set_struct(cfg, False)
 
+    # Remove critic lr and sable decay kappa from the param_spaces
+    del param_spaces[1]
+    del param_spaces[-1]
+    assert len(param_spaces) == 10
+
     carbs = CARBS(carbs_params, param_spaces)
-    for _ in range(10):
+    for _ in range(200):
         suggestion = carbs.suggest().suggestion
         cfg.system.actor_lr = suggestion["actor_lr"]
-        cfg.system.clip_eps = suggestion["clip_eps"]
         cfg.system.ppo_epochs = suggestion["ppo_epochs"]
+        cfg.system.num_minibatches = int(2 ** suggestion["num_minibatches"])
+        cfg.system.gamma = suggestion["gamma"]
+        cfg.system.gae_lambda = suggestion["gae_lambda"]
+        cfg.system.clip_eps = suggestion["clip_eps"]
+        cfg.system.ent_coef = suggestion["ent_coef"]
+        cfg.system.vf_coef = suggestion["vf_coef"]
+        cfg.system.max_grad_norm = suggestion["max_grad_norm"]
+        cfg.system.num_updates = int(suggestion["num_updates"] * 10)
+        cfg.arch.num_evaluation = int(suggestion["num_updates"])
         eval_performance = run_experiment(cfg)
         jax.block_until_ready(eval_performance)
-        obs_out = carbs.observe(ObservationInParam(input=suggestion, output=eval_performance))
+        obs_out = carbs.observe(
+            ObservationInParam(
+                input=suggestion, output=eval_performance, cost=suggestion["num_updates"]
+            )
+        )
 
         print(f"Observation {obs_out.logs['observation_count']}")
         print(
