@@ -17,9 +17,20 @@ from carbs import CARBSParams, LinearSpace, LogitSpace, LogSpace, Param
 param_spaces = [
     Param(name="actor_lr", space=LogSpace(scale=0.5, min=1e-6, max=1e-3), search_center=1e-4),
     Param(name="critic_lr", space=LogSpace(scale=0.5, min=1e-6, max=1e-3), search_center=1e-4),
-    Param(name="ppo_epochs", space=LinearSpace(is_integer=True, min=1, max=20), search_center=4),
     Param(
-        name="num_minibatches", space=LinearSpace(is_integer=True, min=1, max=4), search_center=2
+        name="ppo_epochs",
+        space=LinearSpace(
+            is_integer=True,
+            min=1,
+            max=20,
+            scale=3,
+        ),
+        search_center=4,
+    ),
+    Param(
+        name="num_minibatches",
+        space=LinearSpace(is_integer=True, min=1, max=3, scale=3),
+        search_center=1,
     ),
     Param(name="gamma", space=LogitSpace(min=0.01, max=1.0), search_center=0.99),
     Param(name="gae_lambda", space=LogitSpace(min=0.01, max=1.0), search_center=0.95),
@@ -28,7 +39,9 @@ param_spaces = [
     Param(name="vf_coef", space=LogSpace(min=0.01, max=10.0), search_center=0.5),
     Param(name="max_grad_norm", space=LogSpace(min=0.01, max=20.0), search_center=0.5),
     Param(
-        name="num_updates", space=LinearSpace(is_integer=True, min=16, max=244), search_center=40
+        name="num_updates",
+        space=LinearSpace(is_integer=True, min=16, max=244, scale=3),
+        search_center=120,
     ),
     Param(name="decay_kappa", space=LogitSpace(min=0.01, max=1.0), search_center=0.2),
 ]

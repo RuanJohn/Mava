@@ -21,6 +21,7 @@ import flax
 import hydra
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 from carbs import CARBS, ObservationInParam
 from colorama import Fore, Style
@@ -552,8 +553,15 @@ def hydra_entry_point(cfg: DictConfig) -> float:
 
     carbs = CARBS(carbs_params, param_spaces)
     for _ in range(200):
+        system_seed = np.random.randint(1, 1e6)
+        env_seed = np.random.randint(1, 1e6)
+
+        cfg.system.seed = int(system_seed)
+        cfg.env.scenario.task_config.key_integer = int(env_seed)
+
         suggestion = carbs.suggest().suggestion
         cfg.system.actor_lr = suggestion["actor_lr"]
+        cfg.system.critic_lr = suggestion["critic_lr"]
         cfg.system.ppo_epochs = suggestion["ppo_epochs"]
         cfg.system.num_minibatches = int(2 ** suggestion["num_minibatches"])
         cfg.system.gamma = suggestion["gamma"]
