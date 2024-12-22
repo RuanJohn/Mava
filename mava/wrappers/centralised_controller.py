@@ -70,7 +70,7 @@ class CentralControllerWrapper(Wrapper):
         """Specification of the observation of the `RobotWarehouse` environment."""
         agents_view = specs.Array(
             (
-                self._env.num_agents * self._env.observation_spec().agents_view.shape[0],
+                self._env.num_agents * self._env.observation_spec().agents_view.shape[1],
             ),  # assume homogeneous agents
             jnp.float32,
             "agents_view",
