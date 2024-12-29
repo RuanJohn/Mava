@@ -35,13 +35,13 @@ def get_all_action_combinations(num_agents: int, num_actions: int) -> chex.Array
 
 def compute_joint_action_mask(action_mask: chex.Array, combinations: chex.Array) -> chex.Array:
     # Expand dimensions to align batch and combination axes
-    action_mask_expanded = action_mask[:, None, :, :]
-    combinations_expanded = combinations[None, :, :, None]
+    action_mask_expanded = action_mask[:, :, None, :, :]
+    combinations_expanded = combinations[None, None, :, :, None]
 
     # Use the action mask to determine if each combination's action is valid for each agent
-    valid_actions = jnp.take_along_axis(action_mask_expanded, combinations_expanded, axis=3)
+    valid_actions = jnp.take_along_axis(action_mask_expanded, combinations_expanded, axis=4)
 
     # Check that all actions in the combination are valid
-    joint_mask = jnp.all(valid_actions, axis=2)
+    joint_mask = jnp.all(valid_actions, axis=3)
 
     return joint_mask
