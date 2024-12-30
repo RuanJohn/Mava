@@ -39,13 +39,7 @@ class FeedForwardActor(nn.Module):
         """Forward pass."""
         obs_embedding = self.torso(observation.agents_view)
 
-        action_mask = (
-            observation.action_mask[jnp.newaxis, ...]
-            if self.central_controller
-            else observation.action_mask
-        )
-
-        policy = self.action_head(obs_embedding, action_mask)
+        policy = self.action_head(obs_embedding, observation.action_mask)
 
         return policy
 

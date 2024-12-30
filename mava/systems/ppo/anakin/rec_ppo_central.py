@@ -449,7 +449,7 @@ def learner_setup(
 
     # PRNG keys.
     key, actor_net_key, critic_net_key = keys
-    num_actions = int(env.action_spec().num_values)
+    num_actions = int(env.num_joint_actions)
 
     # Define network and optimisers.
     actor_pre_torso = hydra.utils.instantiate(config.network.actor_network.pre_torso)
