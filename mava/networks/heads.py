@@ -113,6 +113,11 @@ class ContinuousActionHead(nn.Module):
     min_scale: float = 1e-3
     independent_std: bool = True  # whether or not the log_std is independent of the observation.
 
+    # These are not needed but we keep them to keep the API consistent with the discrete case.
+    is_central_controller: bool = False
+    num_agents: Optional[int] = None
+    num_indiv_actions: Optional[int] = None
+
     def setup(self) -> None:
         self.mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01))
 

@@ -96,8 +96,8 @@ def get_learner_fn(
             actor_policy = actor_apply_fn(params.actor_params, last_timestep.observation)
             value = critic_apply_fn(params.critic_params, last_timestep.observation)
 
-            action = actor_policy.sample(seed=policy_key).squeeze(axis=0)
-            log_prob = actor_policy.log_prob(action).squeeze(axis=0)
+            action = actor_policy.sample(seed=policy_key)  # .squeeze(axis=0)
+            log_prob = actor_policy.log_prob(action)  # .squeeze(axis=0)
 
             # STEP ENVIRONMENT
             env_state, timestep = jax.vmap(env.step, in_axes=(0, 0))(env_state, action)
@@ -175,7 +175,7 @@ def get_learner_fn(
                     """Calculate the actor loss."""
                     # RERUN NETWORK
                     actor_policy = actor_apply_fn(actor_params, traj_batch.obs)
-                    log_prob = actor_policy.log_prob(traj_batch.action).squeeze(axis=0)
+                    log_prob = actor_policy.log_prob(traj_batch.action)  # .squeeze(axis=0)
 
                     # CALCULATE ACTOR LOSS
                     ratio = jnp.exp(log_prob - traj_batch.log_prob)
@@ -362,7 +362,7 @@ def learner_setup(
     # PRNG keys.
     key, actor_net_key, critic_net_key = keys
 
-    num_actions = int(env.action_spec().num_values)
+    num_actions = int(env.num_joint_actions)
 
     # Define network and optimiser.
     actor_torso = hydra.utils.instantiate(config.network.actor_network.pre_torso)
@@ -487,7 +487,7 @@ def run_experiment(_config: DictConfig) -> float:
     ) -> Tuple[Action, Dict]:
         pi = actor_network.apply(params, timestep.observation)
         action = pi.mode() if config.arch.evaluation_greedy else pi.sample(seed=key)
-        action = action.squeeze(axis=0)
+        # action = action.squeeze(axis=0)
         return action, {}
 
     evaluator = get_eval_fn(eval_env, eval_act_fn, config, absolute_metric=False)

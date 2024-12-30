@@ -14,7 +14,10 @@
 # ruff: noqa: F401
 
 from mava.wrappers.auto_reset_wrapper import AutoResetWrapper
-from mava.wrappers.centralised_controller import CentralControllerWrapper
+from mava.wrappers.centralised_controller import (
+    CentralControllerWrapper,
+    ContinuousCentralControllerWrapper,
+)
 from mava.wrappers.episode_metrics import RecordEpisodeMetrics
 from mava.wrappers.gigastep import GigastepWrapper
 from mava.wrappers.gym import (

@@ -22,26 +22,24 @@ def get_all_action_combinations(num_agents: int, num_actions: int) -> chex.Array
     return grid
 
 
-# def compute_joint_action_mask(action_mask: chex.Array, combinations: chex.Array) -> chex.Array:
-#     # Use the action mask to determine if each combination's action is valid for each agent
-
-#     valid_actions = jnp.take_along_axis(action_mask, combinations.T, axis=1).T
-
-#     # Check that all actions in the combination are valid
-#     joint_mask = jnp.all(valid_actions, axis=1)
-
-#     return joint_mask
-
-
 def compute_joint_action_mask(action_mask: chex.Array, combinations: chex.Array) -> chex.Array:
     # Expand dimensions to align batch and combination axes
-    action_mask_expanded = action_mask[:, :, None, :, :]
-    combinations_expanded = combinations[None, None, :, :, None]
+    is_recurrent = len(action_mask.shape) == 4
+    if is_recurrent:
+        action_mask_expanded = action_mask[:, :, None, :, :]
+        combinations_expanded = combinations[None, None, :, :, None]
+        take_axis = 4
+        agent_axis = 3
+    else:
+        action_mask_expanded = action_mask[:, None, :, :]
+        combinations_expanded = combinations[None, :, :, None]
+        take_axis = 3
+        agent_axis = 2
 
     # Use the action mask to determine if each combination's action is valid for each agent
-    valid_actions = jnp.take_along_axis(action_mask_expanded, combinations_expanded, axis=4)
+    valid_actions = jnp.take_along_axis(action_mask_expanded, combinations_expanded, axis=take_axis)
 
     # Check that all actions in the combination are valid
-    joint_mask = jnp.all(valid_actions, axis=3)
+    joint_mask = jnp.all(valid_actions, axis=agent_axis)
 
     return joint_mask

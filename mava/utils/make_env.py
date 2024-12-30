@@ -45,6 +45,7 @@ from mava.wrappers import (
     CentralControllerWrapper,
     CleanerWrapper,
     ConnectorWrapper,
+    ContinuousCentralControllerWrapper,
     GigastepWrapper,
     GymAgentIDWrapper,
     GymRecordEpisodeMetrics,
@@ -86,6 +87,22 @@ _gym_registry = {
     "SMACLite": SmacWrapper,
 }
 
+_discrete_env_names = [
+    "Cleaner",
+    "GeneralMatrax",
+    "Gigastep",
+    "LevelBasedForaging",
+    "Matrax",
+    "RobotWarehouse",
+    "Smax",
+    "VectorMaConnector",
+]
+_continuous_env_names = [
+    "MaBrax",
+    "MPE",
+    "MaConnector",
+]
+
 
 def add_extra_wrappers(
     train_env: MarlEnv, eval_env: MarlEnv, config: DictConfig
@@ -93,9 +110,12 @@ def add_extra_wrappers(
     # Disable the AgentID wrapper if the environment has implicit agent IDs.
     config.system.add_agent_id = config.system.add_agent_id & (~config.env.implicit_agent_id)
 
-    if config.system.is_central_controller:
+    if config.system.is_central_controller & (config.env.env_name in _discrete_env_names):
         train_env = CentralControllerWrapper(train_env)
         eval_env = CentralControllerWrapper(eval_env)
+    elif config.system.is_central_controller & (config.env.env_name in _continuous_env_names):
+        train_env = ContinuousCentralControllerWrapper(train_env)
+        eval_env = ContinuousCentralControllerWrapper(eval_env)
 
     if config.system.add_agent_id:
         train_env = AgentIDWrapper(train_env)
