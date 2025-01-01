@@ -15,6 +15,7 @@
 import logging
 import subprocess
 import textwrap
+import time
 from typing import Any, Callable
 
 import pandas as pd
@@ -155,6 +156,7 @@ if __name__ == "__main__":
                 f.write(script_contents)
             try:
                 logging.info(f'Attempting to submit: "{system_name}" - "{scenario}"')
-                subprocess.run(["bash", "sbatch run.sh"], check=True)
+                subprocess.run(["sbatch", "run.sh"], check=True)
+                time.sleep(2)
             except Exception as e:
                 logging.error(f"Error submitting job: {e}")
