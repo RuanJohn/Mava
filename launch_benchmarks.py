@@ -21,12 +21,36 @@ from typing import Any, Callable
 import pandas as pd
 
 systems_to_run = [
-    "ff_ppo_central",
+    # "ff_ppo_central",
     "rec_ppo_central",
 ]
 
 scenarios_to_run = [
-    "humanoid_9|8",
+    "smacv2_5_units",
+    "2s3z",
+    "con-7x7x5a",
+    "15x15-4p-5f",
+    "3s_vs_5z",
+    "15x15-4p-3f",
+    "10x10-3p-3f",
+    "8x8-2p-2f-coop",
+    "15x15-3p-5f",
+    "2s-8x8-2p-2f-coop",
+    "medium-6ag",
+    "xlarge-4ag",
+    "2s-10x10-3p-3f",
+    "xlarge-4ag-hard",
+    "con-5x5x3a",
+    "large-4ag-hard",
+    "small-4ag-hard",
+    "large-4ag",
+    "small-4ag",
+    "tiny-4ag-hard",
+    "medium-4ag-hard",
+    "medium-4ag",
+    "tiny-2ag",
+    "tiny-4ag",
+    "tiny-2ag-hard",
 ]
 
 _system_run_file_map = {
