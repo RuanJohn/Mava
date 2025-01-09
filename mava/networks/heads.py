@@ -103,6 +103,53 @@ class DiscreteActionHead(nn.Module):
         return IdentityTransformation(distribution=tfd.Categorical(logits=masked_logits))
 
 
+class FactoredDiscreteActionHead(nn.Module):
+    """Factored Discrete Action Head"""
+
+    action_dim: int
+    is_central_controller: bool = False
+    num_agents: Optional[int] = None
+    num_indiv_actions: Optional[int] = None
+
+    @nn.compact
+    def __call__(
+        self,
+        obs_embedding: chex.Array,
+        action_mask: chex.Array,
+    ) -> tfd.TransformedDistribution:
+        """Action selection for distrete action space environments.
+
+        Args:
+        ----
+            obs_embedding: Observation embedding from network torso.
+            observation: Observation object containing `agents_view`, `action_mask` and
+                `step_count`.
+
+        Returns:
+        -------
+            A transformed tfd.categorical distribution on the action space for action sampling.
+
+        NOTE: We pass both the observation embedding and the observation object to the action head
+        since the observation object contains the action mask and other potentially useful
+        information.
+
+        """
+        actor_logits = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01))(obs_embedding)
+
+        # Reshape logits to factorize the action space
+        actor_logits = actor_logits.reshape(-1, self.num_agents, self.num_indiv_actions)
+
+        masked_logits = jnp.where(
+            action_mask,
+            actor_logits,
+            jnp.finfo(jnp.float32).min,
+        )
+
+        #  We transform this distribution with the `Identity()` transformation to
+        # keep the API identical to the ContinuousActionHead.
+        return IdentityTransformation(distribution=tfd.Categorical(logits=masked_logits))
+
+
 class ContinuousActionHead(nn.Module):
     """ContinuousActionHead using a transformed Normal distribution.
 
