@@ -3,9 +3,22 @@ defaults:
   - arch: anakin
   - system: ppo/ff_ppo_central
   - network: mlp  # [mlp, continuous_mlp, cnn]
-  - env: rware # [cleaner, connector, gigastep, lbf, mabrax, matrax, rware, smax]
+  - env: generalised-matrax # [cleaner, connector, gigastep, lbf, mabrax, matrax, rware, smax]
+  - system/search_spaces@hydra.sweeper.params: ff_ppo_central
+  - override hydra/sweeper: optuna
+  - override hydra/sweeper/sampler: tpe
   - _self_
 
 hydra:
   searchpath:
     - file://mava/configs
+
+  mode: MULTIRUN
+  sweeper:
+      sampler:
+          seed: 234
+      direction: maximize # maximize
+      study_name: cent-ppo-sweep
+      storage: null
+      n_trials: 40
+      n_jobs: 1

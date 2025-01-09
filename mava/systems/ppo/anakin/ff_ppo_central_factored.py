@@ -21,6 +21,7 @@ import flax
 import hydra
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 from colorama import Fore, Style
 from flax.core.frozen_dict import FrozenDict
@@ -601,10 +602,20 @@ def hydra_entry_point(cfg: DictConfig) -> float:
     """Experiment entry point."""
     # Allow dynamic attributes.
     OmegaConf.set_struct(cfg, False)
+    system_seed_int = np.random.randint(0, 2e6)
+    cfg.system.seed = system_seed_int
 
     # Run experiment.
-    eval_performance = run_experiment(cfg)
-    print(f"{Fore.CYAN}{Style.BRIGHT}Factored Central PPO experiment completed{Style.RESET_ALL}")
+    try:
+        eval_performance = run_experiment(cfg)
+        print(
+            f"{Fore.CYAN}{Style.BRIGHT}Factored Central PPO experiment completed{Style.RESET_ALL}"
+        )
+    except Exception as e:
+        print(
+            f"{Fore.RED}{Style.BRIGHT}Factored Central PPO experiment failed: {e}{Style.RESET_ALL}"
+        )
+        eval_performance = -10000.0
     return eval_performance
 
 
