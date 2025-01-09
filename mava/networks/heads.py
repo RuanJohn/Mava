@@ -137,7 +137,8 @@ class FactoredDiscreteActionHead(nn.Module):
         actor_logits = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01))(obs_embedding)
 
         # Reshape logits to factorize the action space
-        actor_logits = actor_logits.reshape(-1, self.num_agents, self.num_indiv_actions)
+        new_shape = actor_logits.shape[:-1] + (self.num_agents, self.num_indiv_actions)
+        actor_logits = actor_logits.reshape(new_shape)
 
         masked_logits = jnp.where(
             action_mask,
