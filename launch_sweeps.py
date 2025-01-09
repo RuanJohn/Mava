@@ -149,7 +149,7 @@ def get_script_contents(
 
     cd Mava
 
-    python {system_run_file} -m env={env}\\
+    python {system_run_file} -m env={env} \\
     """)
 
     # Append the environment-specific scenario line directly
