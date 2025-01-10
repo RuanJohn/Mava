@@ -737,6 +737,8 @@ def run_experiment(_config: DictConfig) -> float:
             eval_batch_size,
             config.network.hidden_state_dim,
         )
+        # duplicate eval_hs across devices
+        eval_hs = jnp.broadcast_to(eval_hs, (n_devices, *eval_hs.shape))
         abs_metric_evaluator = get_eval_fn(eval_env, eval_act_fn, config, absolute_metric=True)
         eval_keys = jax.random.split(key, n_devices)
 
