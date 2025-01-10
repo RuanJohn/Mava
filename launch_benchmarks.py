@@ -13,8 +13,7 @@
 # limitations under the License.
 
 import logging
-
-# import subprocess
+import subprocess
 import textwrap
 import time
 from typing import Any, Callable
@@ -24,7 +23,7 @@ import pandas as pd
 systems_to_run = [
     # "ff_ppo_central",
     # "rec_ppo_central",
-    "ff_ppo_central_factored",
+    # "ff_ppo_central_factored",
     "rec_ppo_central_factored",
 ]
 
@@ -56,6 +55,22 @@ scenarios_to_run = [
     "tiny-2ag-hard",
 ]
 
+scenarios_to_skip = [
+    "con-15x15x23a",
+    "con-10x10x10a",
+    "con-7x7x5a",
+    "con-5x5x3a",
+    "xlarge-4ag",
+    "xlarge-4ag-hard",
+    "large-4ag-hard",
+    "xlarge-4ag",
+    "medium-4ag-hard",
+    "large-8ag",
+    "large-8ag-hard",
+    "medium-4ag",
+    "medium-6ag",
+]
+
 _system_run_file_map = {
     "ff_ppo_central": "mava/systems/ppo/anakin/ff_ppo_central.py",
     "rec_ppo_central": "mava/systems/ppo/anakin/rec_ppo_central.py",
@@ -65,7 +80,7 @@ _system_run_file_map = {
 
 
 def compute_should_run(system_name: str, scenario: str) -> bool:
-    if system_name in systems_to_run:
+    if system_name in systems_to_run and scenario not in scenarios_to_skip:
         return True
     else:
         return False
@@ -185,7 +200,7 @@ if __name__ == "__main__":
                 f.write(script_contents)
             try:
                 logging.info(f'Attempting to submit: "{system_name}" - "{scenario}"')
-                # subprocess.run(["sbatch", "run.sh"], check=True)
+                subprocess.run(["sbatch", "run.sh"], check=True)
                 time.sleep(3)
             except Exception as e:
                 logging.error(f"Error submitting job: {e}")
