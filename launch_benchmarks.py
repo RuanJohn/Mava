@@ -13,7 +13,8 @@
 # limitations under the License.
 
 import logging
-import subprocess
+
+# import subprocess
 import textwrap
 import time
 from typing import Any, Callable
@@ -22,7 +23,9 @@ import pandas as pd
 
 systems_to_run = [
     # "ff_ppo_central",
-    "rec_ppo_central",
+    # "rec_ppo_central",
+    "ff_ppo_central_factored",
+    "rec_ppo_central_factored",
 ]
 
 scenarios_to_run = [
@@ -56,11 +59,13 @@ scenarios_to_run = [
 _system_run_file_map = {
     "ff_ppo_central": "mava/systems/ppo/anakin/ff_ppo_central.py",
     "rec_ppo_central": "mava/systems/ppo/anakin/rec_ppo_central.py",
+    "ff_ppo_central_factored": "mava/systems/ppo/anakin/ff_ppo_central_factored.py",
+    "rec_ppo_central_factored": "mava/systems/ppo/anakin/rec_ppo_central_factored.py",
 }
 
 
 def compute_should_run(system_name: str, scenario: str) -> bool:
-    if system_name in systems_to_run and scenario in scenarios_to_run:
+    if system_name in systems_to_run:
         return True
     else:
         return False
@@ -122,7 +127,7 @@ def get_script_contents(
     """)
 
     # Directly append without extra indentation
-    if system_name == "rec_ppo_central":
+    if system_name.startswith("rec"):
         base_script += f"system.recurrent_chunk_size={recurrent_chunk_size} \\\n"
 
     # Append the environment-specific scenario line directly
@@ -143,7 +148,7 @@ def safe_cast(value: Any, type_func: Callable) -> Any:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    df = pd.read_csv("best_hyperparams/central_ppo.csv")
+    df = pd.read_csv("best_hyperparams/central_ppo_factored.csv")
 
     for _, row in df.iterrows():
         system_name = row["system_name"]
@@ -180,7 +185,7 @@ if __name__ == "__main__":
                 f.write(script_contents)
             try:
                 logging.info(f'Attempting to submit: "{system_name}" - "{scenario}"')
-                subprocess.run(["sbatch", "run.sh"], check=True)
-                time.sleep(2)
+                # subprocess.run(["sbatch", "run.sh"], check=True)
+                time.sleep(3)
             except Exception as e:
                 logging.error(f"Error submitting job: {e}")

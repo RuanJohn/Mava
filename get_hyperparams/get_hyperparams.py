@@ -87,7 +87,26 @@ algo_search_spaces = {
         "config/system/max_grad_norm",
         "config/system/ent_coef",
     ],
+    "ff_ppo_central_factored": [
+        "config/system/actor_lr",
+        "config/system/critic_lr",
+        "config/system/ppo_epochs",
+        "config/system/num_minibatches",
+        "config/system/clip_eps",
+        "config/system/max_grad_norm",
+        "config/system/ent_coef",
+    ],
     "rec_ppo_central": [
+        "config/system/actor_lr",
+        "config/system/critic_lr",
+        "config/system/ppo_epochs",
+        "config/system/num_minibatches",
+        "config/system/clip_eps",
+        "config/system/max_grad_norm",
+        "config/system/ent_coef",
+        "config/system/recurrent_chunk_size",
+    ],
+    "rec_ppo_central_factored": [
         "config/system/actor_lr",
         "config/system/critic_lr",
         "config/system/ppo_epochs",
@@ -116,7 +135,7 @@ algo_column_name = "config/logger/system_name"
 task_column_name = "config/env/scenario/task_name"
 
 
-def process_csv(df):
+def process_csv(df: pd.DataFrame) -> pd.DataFrame:
     # Rename columns to keep only the text after the last '/'
     df.columns = [col.split("/")[-1] for col in df.columns]
 
@@ -129,16 +148,16 @@ def process_csv(df):
     return df
 
 
-def get_target_metric(row):
+def get_target_metric(row: pd.Series) -> str:
     return "evaluator/episode_return/mean"
 
 
-def get_absolute_metric(target_metric):
+def get_absolute_metric(target_metric: str) -> str:
     base_metric_name = "/".join(target_metric.split("/")[1:])
     return f"absolute/{base_metric_name}"
 
 
-def process_algorithm_task(algo_name, task, algo_df):
+def process_algorithm_task(algo_name: str, task: str, algo_df: pd.DataFrame) -> pd.Series:
     # Filter the dataframe for the current task
     task_df = algo_df[algo_df[task_column_name] == task].copy()
 
@@ -208,7 +227,7 @@ def process_algorithm_task(algo_name, task, algo_df):
     return best_row
 
 
-def process_combination(algo_name, task, algo_df):
+def process_combination(algo_name: str, task: str, algo_df: pd.DataFrame) -> dict:
     best_row = process_algorithm_task(algo_name, task, algo_df)
 
     # Create a dictionary to store the results for this combination
@@ -329,7 +348,7 @@ output_df = output_df[columns]
 output_df = process_csv(output_df)
 
 # Save the DataFrame to a CSV file
-file_name = "best_hyperparams/central_ppo.csv"
+file_name = "best_hyperparams/central_ppo_factored.csv"
 output_df.to_csv(file_name, index=False)
 
 print(f"CSV file {file_name} has been created successfully.")
