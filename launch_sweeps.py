@@ -129,6 +129,13 @@ system_scenarios_to_skip = {
         "medium-4ag",
         "medium-4ag-hard",
         "large-4ag",
+        "large-4ag-hard",
+        "xlarge-4ag",
+        "xlarge-4ag-hard",
+        "con-5x5x3a",
+        "con-7x7x5a",
+        "con-10x10x10a",
+        "con-15x15x23a",
     ],
     "rec_ppo_central": [
         "con-15x15x23a",
