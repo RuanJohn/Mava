@@ -382,6 +382,10 @@ class SableNetwork(nn.Module):
             self.action_space_type,
         )
 
+        self.next_obs_prediction = nn.Dense(
+            self.net_config.embed_dim, kernel_init=orthogonal(jnp.sqrt(2))
+        )
+
         # Set the actor and trainer functions
         self.train_encoder_fn = partial(
             train_encoder_fn,
@@ -427,7 +431,7 @@ class SableNetwork(nn.Module):
             encoder=self.encoder, obs=obs, hstate=hstates[0], dones=dones, step_count=step_count
         )
 
-        action_log, entropy = self.train_decoder_fn(
+        action_log, entropy, logits = self.train_decoder_fn(
             decoder=self.decoder,
             obs_rep=obs_rep,
             action=action,
@@ -438,8 +442,12 @@ class SableNetwork(nn.Module):
             rng_key=rng_key,
         )
 
+        predicted_next_obs_rep = self.next_obs_prediction(
+            jnp.concatenate((logits, action[..., jnp.newaxis]), axis=-1)
+        )
+
         value = jnp.squeeze(value, axis=-1)
-        return value, action_log, entropy
+        return value, action_log, entropy, obs_rep, predicted_next_obs_rep
 
     def get_actions(
         self,
@@ -464,7 +472,7 @@ class SableNetwork(nn.Module):
             step_count=step_count,
         )
 
-        output_actions, output_actions_log, updated_dec_hs = self.autoregressive_act(
+        output_actions, output_actions_log, updated_dec_hs, logits = self.autoregressive_act(
             decoder=self.decoder,
             obs_rep=obs_rep,
             legal_actions=legal_actions,
@@ -477,6 +485,10 @@ class SableNetwork(nn.Module):
             encoder=updated_enc_hs,
             decoder_self_retn=updated_dec_hs[0],
             decoder_cross_retn=updated_dec_hs[1],
+        )
+
+        predicted_next_obs_rep = self.next_obs_prediction(
+            jnp.concatenate((logits, output_actions[..., jnp.newaxis]), axis=-1)
         )
 
         value = jnp.squeeze(value, axis=-1)

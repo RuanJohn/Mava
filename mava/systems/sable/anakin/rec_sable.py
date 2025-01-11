@@ -23,6 +23,7 @@ import hydra
 import jax
 import jax.numpy as jnp
 import optax
+import tensorflow_probability.substrates.jax.distributions as tfd
 from colorama import Fore, Style
 from flax.core.frozen_dict import FrozenDict as Params
 from jax import tree
@@ -32,6 +33,7 @@ from rich.pretty import pprint
 
 from mava.evaluator import ActorState, EvalActFn, get_eval_fn, get_num_eval_envs
 from mava.networks import SableNetwork
+from mava.networks.distributions import IdentityTransformation
 from mava.networks.utils.sable import get_init_hidden_state
 from mava.systems.ppo.types import PPOTransition as Transition
 from mava.systems.sable.types import (
@@ -184,7 +186,7 @@ def get_learner_fn(
                 ) -> Tuple:
                     """Calculate Sable loss."""
                     # Rerun network
-                    value, log_prob, entropy = sable_apply_fn(  # type: ignore
+                    value, log_prob, entropy, obs_rep, predicted_next_obs_rep = sable_apply_fn(  # type: ignore
                         params,
                         traj_batch.obs,
                         traj_batch.action,
@@ -218,10 +220,35 @@ def get_learner_fn(
                     value_losses_clipped = jnp.square(value_pred_clipped - value_targets)
                     value_loss = 0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()
 
+                    # Clip self pred logits.
+                    max_logit = 1e2
+                    obs_rep = jnp.clip(obs_rep, -max_logit, max_logit)
+                    predicted_next_obs_rep = jnp.clip(predicted_next_obs_rep, -max_logit, max_logit)
+
+                    # Guard against numerical instability in logits.
+                    _epsilon = 1e-6
+                    rng_key, sample_key_1, sample_key_2 = jax.random.split(rng_key, 3)
+                    obs_rep += jax.random.normal(sample_key_1, obs_rep.shape) * _epsilon
+                    predicted_next_obs_rep += (
+                        jax.random.normal(sample_key_2, predicted_next_obs_rep.shape) * _epsilon
+                    )
+
+                    dist_1 = IdentityTransformation(
+                        distribution=tfd.Categorical(logits=jax.lax.stop_gradient(obs_rep))
+                    )
+                    dist_2 = IdentityTransformation(
+                        distribution=tfd.Categorical(logits=predicted_next_obs_rep)
+                    )
+                    self_pred_loss = tfd.kl_divergence(dist_1, dist_2).mean()
+                    self_pred_loss_threshold = 0.0
+                    self_pred_loss = jnp.maximum(self_pred_loss, self_pred_loss_threshold)
+                    self_pred_loss_coef = 0.5
+
                     total_loss = (
                         actor_loss
                         - config.system.ent_coef * entropy
                         + config.system.vf_coef * value_loss
+                        + self_pred_loss_coef * self_pred_loss
                     )
                     return total_loss, (actor_loss, entropy, value_loss)
 
@@ -519,9 +546,9 @@ def run_experiment(_config: DictConfig) -> float:
 
     # Calculate total timesteps.
     config = check_total_timesteps(config)
-    assert (
-        config.system.num_updates > config.arch.num_evaluation
-    ), "Number of updates per evaluation must be less than total number of updates."
+    assert config.system.num_updates > config.arch.num_evaluation, (
+        "Number of updates per evaluation must be less than total number of updates."
+    )
 
     # Calculate number of updates per evaluation.
     config.system.num_updates_per_eval = config.system.num_updates // config.arch.num_evaluation

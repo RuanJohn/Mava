@@ -80,7 +80,7 @@ def discrete_train_decoder_fn(
     distribution = distrax.Categorical(logits=masked_logits)
     action_log_prob = distribution.log_prob(action)
 
-    return action_log_prob, distribution.entropy()
+    return action_log_prob, distribution.entropy(), masked_logits
 
 
 def get_shifted_discrete_actions(
@@ -123,6 +123,7 @@ def discrete_autoregressive_act(
 
     output_action = jnp.zeros((B, N, 1))
     output_action_log = jnp.zeros_like(output_action)
+    output_logits = jnp.zeros_like(legal_actions, dtype=jnp.float32)
 
     # Apply the decoder autoregressively
     for i in range(N):
@@ -142,6 +143,8 @@ def discrete_autoregressive_act(
         action, action_log = distribution.sample_and_log_prob(seed=sample_key)
         output_action = output_action.at[:, i, :].set(action)
         output_action_log = output_action_log.at[:, i, :].set(action_log)
+        # NOTE: not sure about the 0 slice here.
+        output_logits = output_logits.at[:, i, :].set(logit[:, 0, :])
 
         # Adds all except the last action to shifted_actions, as it is out of range.
         shifted_actions = shifted_actions.at[:, i + 1, 1:].set(
@@ -150,7 +153,7 @@ def discrete_autoregressive_act(
     output_actions = output_action.astype(jnp.int32)
     output_actions = jnp.squeeze(output_actions, axis=-1)
     output_action_log = jnp.squeeze(output_action_log, axis=-1)
-    return output_actions, output_action_log, hstates
+    return output_actions, output_action_log, hstates, output_logits
 
 
 def continuous_train_decoder_fn(
@@ -204,7 +207,7 @@ def continuous_train_decoder_fn(
     action_log_prob = distribution.log_prob(action)
     entropy = distribution.entropy(seed=rng_key)
 
-    return action_log_prob, entropy
+    return action_log_prob, entropy, None
 
 
 def get_shifted_continuous_actions(
