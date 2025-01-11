@@ -45,6 +45,8 @@ from mava.wrappers import (
     CentralControllerWrapper,
     CleanerWrapper,
     ConnectorWrapper,
+    ContinuousCentralControllerWrapper,
+    FactoredCentralControllerWrapper,
     GigastepWrapper,
     GymAgentIDWrapper,
     GymRecordEpisodeMetrics,
@@ -86,16 +88,42 @@ _gym_registry = {
     "SMACLite": SmacWrapper,
 }
 
+_discrete_env_names = [
+    "Cleaner",
+    "GeneralMatrax",
+    "Gigastep",
+    "LevelBasedForaging",
+    "Matrax",
+    "RobotWarehouse",
+    "Smax",
+    "VectorMaConnector",
+]
+_continuous_env_names = [
+    "MaBrax",
+    "MPE",
+    "MaConnector",
+]
+
 
 def add_extra_wrappers(
-    train_env: MarlEnv, eval_env: MarlEnv, config: DictConfig
+    train_env: MarlEnv, eval_env: MarlEnv, config: DictConfig, factored_action_space: bool = False
 ) -> Tuple[MarlEnv, MarlEnv]:
     # Disable the AgentID wrapper if the environment has implicit agent IDs.
     config.system.add_agent_id = config.system.add_agent_id & (~config.env.implicit_agent_id)
 
-    if config.system.is_central_controller:
+    if (
+        config.system.is_central_controller
+        & (config.env.env_name in _discrete_env_names)
+        & factored_action_space
+    ):
+        train_env = FactoredCentralControllerWrapper(train_env)
+        eval_env = FactoredCentralControllerWrapper(eval_env)
+    elif config.system.is_central_controller & (config.env.env_name in _discrete_env_names):
         train_env = CentralControllerWrapper(train_env)
         eval_env = CentralControllerWrapper(eval_env)
+    elif config.system.is_central_controller & (config.env.env_name in _continuous_env_names):
+        train_env = ContinuousCentralControllerWrapper(train_env)
+        eval_env = ContinuousCentralControllerWrapper(eval_env)
 
     if config.system.add_agent_id:
         train_env = AgentIDWrapper(train_env)
@@ -108,7 +136,9 @@ def add_extra_wrappers(
     return train_env, eval_env
 
 
-def make_jumanji_env(config: DictConfig, add_global_state: bool = False) -> Tuple[MarlEnv, MarlEnv]:
+def make_jumanji_env(
+    config: DictConfig, add_global_state: bool = False, factored_action_space: bool = False
+) -> Tuple[MarlEnv, MarlEnv]:
     """
     Create a Jumanji environments for training and evaluation.
 
@@ -135,11 +165,13 @@ def make_jumanji_env(config: DictConfig, add_global_state: bool = False) -> Tupl
     train_env = wrapper(train_env, add_global_state=add_global_state)
     eval_env = wrapper(eval_env, add_global_state=add_global_state)
 
-    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config)
+    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config, factored_action_space)
     return train_env, eval_env
 
 
-def make_jaxmarl_env(config: DictConfig, add_global_state: bool = False) -> Tuple[MarlEnv, MarlEnv]:
+def make_jaxmarl_env(
+    config: DictConfig, add_global_state: bool = False, factored_action_space: bool = False
+) -> Tuple[MarlEnv, MarlEnv]:
     """
      Create a JAXMARL environment.
 
@@ -170,12 +202,14 @@ def make_jaxmarl_env(config: DictConfig, add_global_state: bool = False) -> Tupl
         add_global_state,
     )
 
-    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config)
+    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config, factored_action_space)
 
     return train_env, eval_env
 
 
-def make_matrax_env(config: DictConfig, add_global_state: bool = False) -> Tuple[MarlEnv, MarlEnv]:
+def make_matrax_env(
+    config: DictConfig, add_global_state: bool = False, factored_action_space: bool = False
+) -> Tuple[MarlEnv, MarlEnv]:
     """
     Creates Matrax environments for training and evaluation.
 
@@ -200,12 +234,12 @@ def make_matrax_env(config: DictConfig, add_global_state: bool = False) -> Tuple
     train_env = wrapper(train_env, add_global_state)
     eval_env = wrapper(eval_env, add_global_state)
 
-    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config)
+    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config, factored_action_space)
     return train_env, eval_env
 
 
 def make_general_matrax_env(
-    config: DictConfig, add_global_state: bool = False
+    config: DictConfig, add_global_state: bool = False, factored_action_space: bool = False
 ) -> Tuple[MarlEnv, MarlEnv]:
     """
     Creates Matrax environments for training and evaluation.
@@ -230,12 +264,12 @@ def make_general_matrax_env(
     train_env = wrapper(train_env, add_global_state)
     eval_env = wrapper(eval_env, add_global_state)
 
-    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config)
+    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config, factored_action_space)
     return train_env, eval_env
 
 
 def make_gigastep_env(
-    config: DictConfig, add_global_state: bool = False
+    config: DictConfig, add_global_state: bool = False, factored_action_space: bool = False
 ) -> Tuple[MarlEnv, MarlEnv]:
     """
      Create a Gigastep environment.
@@ -259,7 +293,7 @@ def make_gigastep_env(
     train_env: MarlEnv = wrapper(scenario.make(**kwargs), has_global_state=add_global_state)
     eval_env: MarlEnv = wrapper(scenario.make(**kwargs), has_global_state=add_global_state)
 
-    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config)
+    train_env, eval_env = add_extra_wrappers(train_env, eval_env, config, factored_action_space)
     return train_env, eval_env
 
 
@@ -301,7 +335,9 @@ def make_gym_env(
     return envs
 
 
-def make(config: DictConfig, add_global_state: bool = False) -> Tuple[MarlEnv, MarlEnv]:
+def make(
+    config: DictConfig, add_global_state: bool = False, factored_action_space: bool = False
+) -> Tuple[MarlEnv, MarlEnv]:
     """
     Create environments for training and evaluation.
 
@@ -318,14 +354,14 @@ def make(config: DictConfig, add_global_state: bool = False) -> Tuple[MarlEnv, M
     env_name = config.env.env_name
 
     if env_name in _jumanji_registry:
-        return make_jumanji_env(config, add_global_state)
+        return make_jumanji_env(config, add_global_state, factored_action_space)
     elif env_name in _jaxmarl_registry:
-        return make_jaxmarl_env(config, add_global_state)
+        return make_jaxmarl_env(config, add_global_state, factored_action_space)
     elif env_name in _matrax_registry:
-        return make_matrax_env(config, add_global_state)
+        return make_matrax_env(config, add_global_state, factored_action_space)
     elif env_name in _general_matrax_registry:
-        return make_general_matrax_env(config, add_global_state)
+        return make_general_matrax_env(config, add_global_state, factored_action_space)
     elif env_name in _gigastep_registry:
-        return make_gigastep_env(config, add_global_state)
+        return make_gigastep_env(config, add_global_state, factored_action_space)
     else:
         raise ValueError(f"{env_name} is not a supported environment.")
