@@ -82,7 +82,7 @@ _env_scenario_registry = {
 
 systems_to_run = [
     # "ff_ppo_central",
-    "rec_ppo_central",
+    # "rec_ppo_central",
     # "ff_ppo_central_factored",
     "rec_ppo_central_factrored",
 ]
@@ -97,6 +97,20 @@ system_scenarios_to_skip = {
         "hopper_3x1",
         "humanoid_9|8",
         "walker2d_2x3",
+        "2s-8x8-2p-2f-coop",
+        "8x8-2p-2f-coop",
+        "2s-10x10-3p-3f",
+        "10x10-3p-3f",
+        "15x15-3p-5f",
+        "15x15-4p-3f",
+        "15x15-4p-5f",
+        "2s3z",
+        "3s5z",
+        "5m_vs_6m",
+        "10m_vs_11m",
+        "27m_vs_30m",
+        "3s5z_vs_3s6z",
+        "3s_vs_5z",
     ],
     "rec_ppo_central": [
         "con-15x15x23a",
