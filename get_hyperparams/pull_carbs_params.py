@@ -70,6 +70,10 @@ algo_search_spaces = {
         *base_search_space,
         "config/system/critic_lr",
     ],
+    "ff_ppo_central_factored": [
+        *base_search_space,
+        "config/system/critic_lr",
+    ],
 }
 
 env_renaming = {

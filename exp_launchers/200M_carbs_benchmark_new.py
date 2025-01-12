@@ -21,40 +21,29 @@ from typing import Any, Tuple
 
 import pandas as pd
 
-tpu_idx_to_run_file = {
-    1: "mava/systems/ppo/anakin/ff_ippo.py",
-    2: "mava/systems/ppo/anakin/ff_mappo.py",
-    3: "mava/systems/mat/anakin/mat.py",
-    4: "mava/systems/sable/anakin/ff_sable.py",
-    5: "mava/systems/sable/anakin/rec_sable.py",
-    6: "mava/systems/ppo/anakin/ff_ppo_central.py",
-    7: "mava/systems/ppo/anakin/ff_ippo_tabular_split.py",
-    8: "mava/systems/ppo/anakin/ff_ppo_central_tabular.py",
-}
-
-tpu_idx_to_system_name = {
-    1: "ff_ippo",
-    2: "ff_mappo",
-    3: "mat",
-    4: "ff_sable",
-    5: "rec_sable",
-    6: "ff_ppo_central",
-    7: "ff_ippo_tabular_split",
-    8: "ff_ppo_central_tabular",
+system_name_to_run_file = {
+    "ff_ippo": "mava/systems/ppo/anakin/ff_ippo.py",
+    "ff_mappo": "mava/systems/ppo/anakin/ff_mappo.py",
+    "mat": "mava/systems/mat/anakin/mat.py",
+    "ff_sable": "mava/systems/sable/anakin/ff_sable.py",
+    "rec_sable": "mava/systems/sable/anakin/rec_sable.py",
+    "ff_ppo_central": "mava/systems/ppo/anakin/ff_ppo_central.py",
+    "ff_ippo_tabular_split": "mava/systems/ppo/anakin/ff_ippo_tabular_split.py",
+    "ff_ppo_central_tabular": "mava/systems/ppo/anakin/ff_ppo_central_tabular.py",
+    "ff_ppo_central_factored": "mava/systems/ppo/anakin/ff_ppo_central_factored.py",
 }
 
 num_agents = [2, 3, 4, 5, 6, 7]
 num_actions = [2, 3, 4, 5, 6, 7, 8]
 env_seeds = [42]
-system_seeds = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
 
 def safe_cast(value: Any, type_func: Any) -> Any:
     return type_func(value) if pd.notna(value) else value
 
 
-def should_run(system_name: str, tpu_idx: int) -> bool:
-    if system_name == tpu_idx_to_system_name[tpu_idx]:
+def should_run(params_system_name: str, system_name_to_run: str) -> bool:
+    if params_system_name == system_name_to_run:
         return True
     return False
 
@@ -69,7 +58,6 @@ def get_eval_updates(step_count: str) -> Tuple[int, int]:
 
 
 def get_script_contents(
-    tpu_idx: int,
     df_row: pd.Series,
     system_seed: str,
     num_agent: int,
@@ -79,7 +67,7 @@ def get_script_contents(
 ) -> str:
     timestamp = time.strftime("%Y%m%d-%H%M%S")
 
-    system_run_file = tpu_idx_to_run_file[tpu_idx]
+    system_run_file = system_name_to_run_file[system_name]
 
     neptune_tag = '["first-carbs-benchmark-200M"]'
 
@@ -125,8 +113,28 @@ def get_script_contents(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tpu-idx", type=int, required=True, default=1)
+    parser.add_argument(
+        "-se",
+        "--system_seeds",
+        nargs="+",  # This allows one or more values to be passed
+        default=["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],  # Default value
+        help="List of system seeds",
+    )
+
+    # Argument for system name
+    parser.add_argument(
+        "-sn",
+        "--system_name",
+        type=str,  # Expect a single string value
+        default="ff_ippo",  # Default value
+        help="Name of the system (default: 'ff_ippo')",
+    )
+
     args = parser.parse_args()
+
+    # Check system name exist. Raise error if it doesn't
+    if args.system_name not in system_name_to_run_file:
+        raise ValueError(f"System name {args.system_name} not found in system_name_to_run_file")
 
     logging.basicConfig(level=logging.INFO)
 
@@ -134,13 +142,12 @@ if __name__ == "__main__":
 
     for _, row in best_hyper_params.iterrows():
         system_name = row["system_name"]
-        if should_run(system_name, args.tpu_idx):
-            for system_seed in system_seeds:
+        if should_run(system_name, args.system_name):
+            for system_seed in args.system_seeds:
                 for num_agent in num_agents:
                     for num_action in num_actions:
                         for env_seed in env_seeds:
                             script_contents = get_script_contents(
-                                tpu_idx=args.tpu_idx,
                                 df_row=row,
                                 system_seed=system_seed,
                                 num_agent=num_agent,
