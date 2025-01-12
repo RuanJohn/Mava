@@ -38,6 +38,7 @@ class CentralControllerWrapper(Wrapper):
         self.joint_action_combinations = get_all_action_combinations(
             self._env.num_agents, self.num_actions
         )
+        self.num_joint_actions = self.num_actions**self._env.num_agents
 
     def reset(self, key: chex.PRNGKey) -> Tuple[State, TimeStep]:
         state, timestep = self._env.reset(key)
@@ -70,7 +71,7 @@ class CentralControllerWrapper(Wrapper):
         """Specification of the observation of the `RobotWarehouse` environment."""
         agents_view = specs.Array(
             (
-                self._env.num_agents * self._env.observation_spec().agents_view.shape[0],
+                self._env.num_agents * self._env.observation_spec().agents_view.shape[1],
             ),  # assume homogeneous agents
             jnp.float32,
             "agents_view",
@@ -88,8 +89,136 @@ class CentralControllerWrapper(Wrapper):
 
     def action_spec(self) -> specs.DiscreteArray:
         joint_action_spec = specs.DiscreteArray(
-            num_values=self.num_actions**self._env.num_agents,
+            num_values=self.num_joint_actions,
             name="action",
             dtype=jnp.int32,
+        )
+        return joint_action_spec
+
+
+class FactoredCentralControllerWrapper(Wrapper):
+    def __init__(self, env: Environment):
+        super().__init__(env)
+        self.num_actions = int(env.action_spec().num_values[0])
+        self.num_joint_actions = self.num_actions * self._env.num_agents
+
+    def reset(self, key: chex.PRNGKey) -> Tuple[State, TimeStep]:
+        state, timestep = self._env.reset(key)
+
+        joint_obs = jnp.concatenate(timestep.observation.agents_view, axis=0)
+        timestep.observation = Observation(
+            agents_view=joint_obs.astype(float),
+            action_mask=timestep.observation.action_mask,
+            step_count=timestep.observation.step_count,
+        )
+        joint_reward = jnp.mean(timestep.reward)
+        timestep = timestep.replace(reward=joint_reward)
+        return state, timestep
+
+    def step(self, state: State, action: chex.Array) -> Tuple[State, TimeStep]:
+        state, timestep = self._env.step(state, action)
+
+        joint_obs = jnp.concatenate(timestep.observation.agents_view, axis=0)
+        timestep.observation = Observation(
+            agents_view=joint_obs.astype(float),
+            action_mask=timestep.observation.action_mask,
+            step_count=timestep.observation.step_count,
+        )
+        joint_reward = jnp.mean(timestep.reward)
+        timestep = timestep.replace(reward=joint_reward)
+        return state, timestep
+
+    def observation_spec(self) -> specs.Spec[Observation]:
+        """Specification of the observation of the `RobotWarehouse` environment."""
+        agents_view = specs.Array(
+            (
+                self._env.num_agents * self._env.observation_spec().agents_view.shape[1],
+            ),  # assume homogeneous agents
+            jnp.float32,
+            "agents_view",
+        )
+        action_mask = self._env.observation_spec().action_mask
+        step_count = specs.BoundedArray((), jnp.int32, 0, self.time_limit, "step_count")
+
+        return specs.Spec(
+            Observation,
+            "ObservationSpec",
+            agents_view=agents_view,
+            action_mask=action_mask,
+            step_count=step_count,
+        )
+
+    def action_spec(self) -> specs.DiscreteArray:
+        joint_action_spec = specs.DiscreteArray(
+            num_values=self.num_joint_actions,
+            name="action",
+            dtype=jnp.int32,
+        )
+        return joint_action_spec
+
+
+class ContinuousCentralControllerWrapper(Wrapper):
+    def __init__(self, env: Environment):
+        super().__init__(env)
+        self.num_actions = env.action_dim
+        self.num_agents = env.num_agents
+        self.num_joint_actions = self.num_actions * self.num_agents
+
+    def reset(self, key: chex.PRNGKey) -> Tuple[State, TimeStep]:
+        state, timestep = self._env.reset(key)
+
+        joint_obs = jnp.concatenate(timestep.observation.agents_view, axis=0)
+        timestep.observation = Observation(
+            agents_view=joint_obs.astype(float),
+            action_mask=timestep.observation.action_mask,
+            step_count=timestep.observation.step_count,
+        )
+        joint_reward = jnp.mean(timestep.reward)
+        timestep = timestep.replace(reward=joint_reward)
+        return state, timestep
+
+    def step(self, state: State, action: chex.Array) -> Tuple[State, TimeStep]:
+        # Reshape the action from num_agents * action_dim to num_agents, action_dim
+        # while keeping the batch dimension in the front.
+        team_action = jnp.reshape(action, (self.num_agents, self.num_actions))
+        state, timestep = self._env.step(state, team_action)
+
+        joint_obs = jnp.concatenate(timestep.observation.agents_view, axis=0)
+        timestep.observation = Observation(
+            agents_view=joint_obs.astype(float),
+            action_mask=timestep.observation.action_mask,
+            step_count=timestep.observation.step_count,
+        )
+        joint_reward = jnp.mean(timestep.reward)
+        timestep = timestep.replace(reward=joint_reward)
+        return state, timestep
+
+    def observation_spec(self) -> specs.Spec[Observation]:
+        """Specification of the observation of the `RobotWarehouse` environment."""
+        agents_view = specs.Array(
+            (
+                self._env.num_agents * self._env.observation_spec().agents_view.shape[1],
+            ),  # assume homogeneous agents
+            jnp.float32,
+            "agents_view",
+        )
+        action_mask = self._env.observation_spec().action_mask
+        step_count = specs.BoundedArray((), jnp.int32, 0, self.time_limit, "step_count")
+
+        return specs.Spec(
+            Observation,
+            "ObservationSpec",
+            agents_view=agents_view,
+            action_mask=action_mask,
+            step_count=step_count,
+        )
+
+    def action_spec(self) -> specs.BoundedArray:
+        joint_action_spec = specs.BoundedArray(
+            shape=(self.num_joint_actions,),
+            name="action",
+            dtype=self._env.action_spec().dtype,
+            minimum=self._env.action_spec().minimum,
+            maximum=self._env.action_spec().maximum,
         )
         return joint_action_spec

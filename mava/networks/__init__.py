@@ -14,6 +14,7 @@
 # ruff: noqa: F401
 
 from mava.networks.base import (
+    CentralControllerScannedRNN,
     FeedForwardActor,
     FeedForwardQNet,
     FeedForwardValueNet,

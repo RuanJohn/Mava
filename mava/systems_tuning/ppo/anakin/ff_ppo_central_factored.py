@@ -23,6 +23,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from carbs import CARBS, ObservationInParam
 from colorama import Fore, Style
 from flax.core.frozen_dict import FrozenDict
 from jax import tree
@@ -35,6 +36,7 @@ from mava.evaluator import ActorState, get_eval_fn
 from mava.networks import FeedForwardActor as Actor
 from mava.networks import FeedForwardValueNet as Critic
 from mava.systems.ppo.types import LearnerState, OptStates, Params, PPOTransition
+from mava.systems_tuning.tune_space import carbs_params, param_spaces
 from mava.types import (
     Action,
     ActorApply,
@@ -181,6 +183,8 @@ def get_learner_fn(
                     # CALCULATE ACTOR LOSS
                     ratio = jnp.exp(log_prob - traj_batch.log_prob)
                     gae = (gae - gae.mean()) / (gae.std() + 1e-8)
+                    # duplicate the gae over the agent dimension
+                    gae = jnp.repeat(gae[..., jnp.newaxis], config.system.num_agents, axis=-1)
                     loss_actor1 = ratio * gae
                     loss_actor2 = (
                         jnp.clip(
@@ -364,10 +368,11 @@ def learner_setup(
     key, actor_net_key, critic_net_key = keys
 
     num_actions = int(env.num_joint_actions)
+    config.system.num_agents = env.num_agents
 
     # Define network and optimiser.
     actor_torso = hydra.utils.instantiate(config.network.actor_network.pre_torso)
-    action_head, _ = get_action_head(env.action_spec())
+    action_head, _ = get_action_head(env.action_spec(), factored_action_space=True)
     actor_action_head = hydra.utils.instantiate(
         action_head,
         action_dim=num_actions,
@@ -461,13 +466,13 @@ def learner_setup(
 
 def run_experiment(_config: DictConfig) -> float:
     """Runs experiment."""
-    _config.logger.system_name = "ff_ppo_central"
+    _config.logger.system_name = "ff_ppo_central_factored"
     config = copy.deepcopy(_config)
 
     n_devices = len(jax.devices())
 
     # Create the enviroments for train and eval.
-    env, eval_env = environments.make(config)
+    env, eval_env = environments.make(config, factored_action_space=True)
 
     # PRNG keys.
     key, key_e, actor_net_key, critic_net_key = jax.random.split(
@@ -592,23 +597,63 @@ def run_experiment(_config: DictConfig) -> float:
 
 @hydra.main(
     config_path="../../../configs/default",
-    config_name="ff_ppo_central.yaml",
+    config_name="ff_ppo_central_factored.yaml",
     version_base="1.2",
 )
 def hydra_entry_point(cfg: DictConfig) -> float:
     """Experiment entry point."""
     # Allow dynamic attributes.
     OmegaConf.set_struct(cfg, False)
-    system_seed_int = np.random.randint(0, 2e6)
-    cfg.system.seed = system_seed_int
 
-    # Run experiment.
-    try:
+    # Remove sable decay kappa from the param_spaces
+    del param_spaces[-1]
+    assert len(param_spaces) == 11
+
+    carbs = CARBS(carbs_params, param_spaces)
+    for _ in range(200):
+        system_seed = np.random.randint(1, 1e6)
+        env_seed = np.random.randint(1, 1e6)
+
+        cfg.system.seed = int(system_seed)
+        cfg.env.scenario.task_config.key_integer = int(env_seed)
+
+        suggestion = carbs.suggest().suggestion
+        cfg.system.actor_lr = suggestion["actor_lr"]
+        cfg.system.critic_lr = suggestion["critic_lr"]
+        cfg.system.ppo_epochs = suggestion["ppo_epochs"]
+        cfg.system.num_minibatches = int(2 ** suggestion["num_minibatches"])
+        cfg.system.gamma = suggestion["gamma"]
+        cfg.system.gae_lambda = suggestion["gae_lambda"]
+        cfg.system.clip_eps = suggestion["clip_eps"]
+        cfg.system.ent_coef = suggestion["ent_coef"]
+        cfg.system.vf_coef = suggestion["vf_coef"]
+        cfg.system.max_grad_norm = suggestion["max_grad_norm"]
+        cfg.system.num_updates = int(suggestion["num_updates"] * 10)
+        cfg.arch.num_evaluation = int(suggestion["num_updates"])
+
+        # Run experiment.
         eval_performance = run_experiment(cfg)
-        print(f"{Fore.CYAN}{Style.BRIGHT}Central PPO experiment completed{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"{Fore.RED}{Style.BRIGHT}Central PPO experiment failed: {e}{Style.RESET_ALL}")
-        eval_performance = -10000.0
+        jax.block_until_ready(eval_performance)
+
+        obs_out = carbs.observe(
+            ObservationInParam(
+                input=suggestion, output=eval_performance, cost=suggestion["num_updates"]
+            )
+        )
+
+        print(f"Observation {obs_out.logs['observation_count']}")
+        print(
+            f"Observed Actor LR={obs_out.logs['observation/actor_lr']:.2e}, "
+            f"PPO Epochs={obs_out.logs['observation/ppo_epochs']}, "
+            f"output {obs_out.logs['observation/output']:.3f}"
+        )
+        print(
+            f"Best lr={obs_out.logs['best_observation/actor_lr']:.2e}, "
+            f"PPO epochs={obs_out.logs['best_observation/ppo_epochs']}, "
+            f"output {obs_out.logs['best_observation/output']:.3f}"
+        )
+
+    print(f"{Fore.CYAN}{Style.BRIGHT}Factored Central PPO experiment completed{Style.RESET_ALL}")
     return eval_performance
 
 

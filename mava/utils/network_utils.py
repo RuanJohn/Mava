@@ -20,10 +20,17 @@ from jumanji.specs import DiscreteArray, MultiDiscreteArray, Spec
 _DISCRETE = "discrete"
 _CONTINUOUS = "continuous"
 
+discrete_spaces = (DiscreteArray, MultiDiscreteArray, Discrete, MultiDiscrete)
 
-def get_action_head(action_types: Union[Spec, Space]) -> Tuple[Dict[str, str], str]:
+
+def get_action_head(
+    action_types: Union[Spec, Space], factored_action_space: bool = False
+) -> Tuple[Dict[str, str], str]:
     """Returns the appropriate action head config based on the environment action_spec."""
-    if isinstance(action_types, (DiscreteArray, MultiDiscreteArray, Discrete, MultiDiscrete)):
+    if isinstance(action_types, discrete_spaces) and factored_action_space:
+        return {"_target_": "mava.networks.heads.FactoredDiscreteActionHead"}, _DISCRETE
+
+    elif isinstance(action_types, discrete_spaces):
         return {"_target_": "mava.networks.heads.DiscreteActionHead"}, _DISCRETE
 
     return {"_target_": "mava.networks.heads.ContinuousActionHead"}, _CONTINUOUS
