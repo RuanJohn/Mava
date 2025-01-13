@@ -22,7 +22,7 @@ import pandas as pd
 
 systems_to_run = [
     # "ff_ppo_central",
-    # "rec_ppo_central",
+    "rec_ppo_central",
     # "ff_ppo_central_factored",
     "rec_ppo_central_factored",
 ]
@@ -80,7 +80,7 @@ _system_run_file_map = {
 
 
 def compute_should_run(system_name: str, scenario: str) -> bool:
-    if system_name in systems_to_run and scenario not in scenarios_to_skip:
+    if system_name in systems_to_run:
         return True
     else:
         return False
@@ -109,7 +109,7 @@ def get_script_contents(
 
     job_name = f"benchmark-{scenario_job_name}"
 
-    if system_name == "rec_ppo_central":
+    if system_name.startswith("rec"):
         job_name = f"rec-{job_name}"
 
     job_name = f'"{job_name}"'
