@@ -19,14 +19,15 @@ import textwrap
 import time
 
 tpu_idx_to_run_file = {
-    1: "mava/systems_tuning/ppo/anakin/ff_ippo.py",
-    2: "mava/systems_tuning/ppo/anakin/ff_mappo.py",
+    1: "mava/systems_tuning/ppo/anakin/rec_ippo.py",
+    2: "mava/systems_tuning/ppo/anakin/rec_mappo.py",
     3: "mava/systems_tuning/mat/anakin/mat.py",
     4: "mava/systems_tuning/sable/anakin/ff_sable.py",
     5: "mava/systems_tuning/sable/anakin/rec_sable.py",
-    6: "mava/systems_tuning/ppo/anakin/ff_ppo_central.py",
+    6: "mava/systems_tuning/ppo/anakin/rec_ppo_central.py",
     7: "mava/systems_tuning/ppo/anakin/ff_ippo_tabular_split.py",
     8: "mava/systems_tuning/ppo/anakin/ff_ppo_central_tabular.py",
+    9: "mava/systems_tuning/ppo/anakin/rec_ppo_central_factored.py",
 }
 
 
@@ -37,7 +38,7 @@ def get_script_contents(
 
     system_run_file = tpu_idx_to_run_file[tpu_idx]
 
-    neptune_tag = '["first-carbs-sweep"]'
+    neptune_tag = '["first-carbs-sweep-repeated-matrax"]'
 
     # TODO: use_netpune shoudl be True
     script = f"""\
