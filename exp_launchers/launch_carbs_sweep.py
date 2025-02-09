@@ -25,9 +25,9 @@ tpu_idx_to_run_file = {
     4: "mava/systems_tuning/sable/anakin/ff_sable.py",
     5: "mava/systems_tuning/sable/anakin/rec_sable.py",
     6: "mava/systems_tuning/ppo/anakin/rec_ppo_central.py",
-    7: "mava/systems_tuning/ppo/anakin/ff_ippo_tabular_split.py",
-    8: "mava/systems_tuning/ppo/anakin/ff_ppo_central_tabular.py",
-    9: "mava/systems_tuning/ppo/anakin/rec_ppo_central_factored.py",
+    7: "mava/systems_tuning/ppo/anakin/rec_ppo_central_factored.py",
+    8: "mava/systems_tuning/ppo/anakin/ff_ippo_tabular_split.py",
+    9: "mava/systems_tuning/ppo/anakin/ff_ppo_central_tabular.py",
 }
 
 
