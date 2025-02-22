@@ -21,7 +21,6 @@ import flax
 import hydra
 import jax
 import jax.numpy as jnp
-import numpy as np
 import optax
 from colorama import Fore, Style
 from flax.core.frozen_dict import FrozenDict
@@ -602,8 +601,8 @@ def hydra_entry_point(cfg: DictConfig) -> float:
     """Experiment entry point."""
     # Allow dynamic attributes.
     OmegaConf.set_struct(cfg, False)
-    system_seed_int = np.random.randint(0, 2e6)
-    cfg.system.seed = system_seed_int
+    # system_seed_int = np.random.randint(0, 2e6)
+    # cfg.system.seed = system_seed_int
 
     # Run experiment.
     try:
