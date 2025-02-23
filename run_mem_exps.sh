@@ -1,0 +1,2 @@
+#!/bin/bash
+python mem_log_exps/climbing.py && python mem_log_exps/connector.py && python mem_log_exps/gen_matrax.py && python mem_log_exps/lbf.py && python mem_log_exps/mabrax.py && python mem_log_exps/mpe.py && python mem_log_exps/rware.py && python mem_log_exps/smax.py
