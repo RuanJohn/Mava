@@ -31,17 +31,17 @@ def get_script_contents(
     timestamp = time.strftime("%Y%m%d-%H%M%S")
 
     if system_name == "ff_ppo_central":
-        system_run_file = "mava/systems/ppo/ff_ppo_central.py"
+        system_run_file = "mava/systems/ppo/anakin/ff_ppo_central.py"
     elif system_name == "ff_ippo":
-        system_run_file = "mava/systems/ppo/ff_ippo.py"
+        system_run_file = "mava/systems/ppo/anakin/ff_ippo.py"
     elif system_name == "ff_mappo":
-        system_run_file = "mava/systems/ppo/ff_mappo.py"
+        system_run_file = "mava/systems/ppo/anakin/ff_mappo.py"
     elif system_name == "ff_ippo_tabular":
-        system_run_file = "mava/systems/ppo/ff_ippo_tabular.py"
+        system_run_file = "mava/systems/ppo/anakin/ff_ippo_tabular.py"
     elif system_name == "ff_ppo_central_tabular":
-        system_run_file = "mava/systems/ppo/ff_ppo_central_tabular.py"
+        system_run_file = "mava/systems/ppo/anakin/ff_ppo_central_tabular.py"
     elif system_name == "ff_ippo_tabular_split":
-        system_run_file = "mava/systems/ppo/ff_ippo_tabular_split.py"
+        system_run_file = "mava/systems/ppo/anakin/ff_ippo_tabular_split.py"
     elif system_name == "mat":
         system_run_file = "mava/systems/mat/anakin/mat.py"
     elif system_name == "ff_sable":
