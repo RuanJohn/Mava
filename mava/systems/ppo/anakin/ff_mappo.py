@@ -11,6 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
+
 import copy
 import time
 from typing import Any, Dict, Tuple
@@ -20,6 +24,7 @@ import flax
 import hydra
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 from colorama import Fore, Style
 from flax.core.frozen_dict import FrozenDict
@@ -38,6 +43,7 @@ from mava.utils.checkpointing import Checkpointer
 from mava.utils.config import check_total_timesteps
 from mava.utils.jax_utils import merge_leading_dims, unreplicate_batch_dim, unreplicate_n_dims
 from mava.utils.logger import LogEvent, MavaLogger
+from mava.utils.memory_logging import ContinuousGPUMonitor
 from mava.utils.network_utils import get_action_head
 from mava.utils.training import make_learning_rate
 from mava.wrappers.episode_metrics import get_final_step_metrics
@@ -460,13 +466,13 @@ def run_experiment(_config: DictConfig) -> float:
 
     # Calculate total timesteps.
     config = check_total_timesteps(config)
-    assert (
-        config.system.num_updates > config.arch.num_evaluation
-    ), "Number of updates per evaluation must be less than total number of updates."
+    assert config.system.num_updates > config.arch.num_evaluation, (
+        "Number of updates per evaluation must be less than total number of updates."
+    )
 
-    assert (
-        config.arch.num_envs % config.system.num_minibatches == 0
-    ), "Number of envs must be divisibile by number of minibatches."
+    assert config.arch.num_envs % config.system.num_minibatches == 0, (
+        "Number of envs must be divisibile by number of minibatches."
+    )
 
     # Calculate number of updates per evaluation.
     config.system.num_updates_per_eval = config.system.num_updates // config.arch.num_evaluation
@@ -499,14 +505,23 @@ def run_experiment(_config: DictConfig) -> float:
     for eval_step in range(config.arch.num_evaluation):
         # Train.
         start_time = time.time()
-        learner_output = learn(learner_state)
-        jax.block_until_ready(learner_output)
+
+        with ContinuousGPUMonitor(interval=0.1) as learner_monitor:
+            learner_output = learn(learner_state)
+            jax.block_until_ready(learner_output)
 
         # Log the results of the training.
         elapsed_time = time.time() - start_time
         t = int(steps_per_rollout * (eval_step + 1))
         episode_metrics, ep_completed = get_final_step_metrics(learner_output.episode_metrics)
         episode_metrics["steps_per_second"] = steps_per_rollout / elapsed_time
+
+        # Log the learner memory usage.
+        learner_gpu_memory = {}
+        for metric, data_values in learner_monitor.gpu_data.items():
+            learner_gpu_memory[f"{metric}/mean"] = np.mean(data_values)
+            learner_gpu_memory[f"{metric}/max"] = np.max(data_values)
+        logger.log(learner_gpu_memory, t, eval_step, LogEvent.ACT)
 
         # Separately log timesteps, actoring metrics and training metrics.
         logger.log({"timestep": t}, t, eval_step, LogEvent.MISC)
@@ -519,8 +534,18 @@ def run_experiment(_config: DictConfig) -> float:
         key_e, *eval_keys = jax.random.split(key_e, n_devices + 1)
         eval_keys = jnp.stack(eval_keys)
         eval_keys = eval_keys.reshape(n_devices, -1)
-        # Evaluate.
-        eval_metrics = evaluator(trained_params, eval_keys, {})
+        with ContinuousGPUMonitor(interval=0) as eval_monitor:
+            time.sleep(3)
+            eval_metrics = evaluator(trained_params, eval_keys, {})
+            jax.block_until_ready(eval_metrics)
+
+        # Log the evaluator memory usage.
+        eval_gpu_memory = {}
+        for metric, data_values in eval_monitor.gpu_data.items():
+            eval_gpu_memory[f"{metric}/mean"] = np.mean(data_values)
+            eval_gpu_memory[f"{metric}/max"] = np.max(data_values)
+        logger.log(eval_gpu_memory, t, eval_step, LogEvent.EVAL)
+
         logger.log(eval_metrics, t, eval_step, LogEvent.EVAL)
         episode_return = jnp.mean(eval_metrics["episode_return"])
 
