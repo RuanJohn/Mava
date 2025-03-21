@@ -551,9 +551,9 @@ def run_experiment(_config: DictConfig) -> float:
 
     # Calculate total timesteps.
     config = check_total_timesteps(config)
-    assert (
-        config.system.num_updates > config.arch.num_evaluation
-    ), "Number of updates per evaluation must be less than total number of updates."
+    assert config.system.num_updates > config.arch.num_evaluation, (
+        "Number of updates per evaluation must be less than total number of updates."
+    )
 
     # Calculate number of updates per evaluation.
     config.system.num_updates_per_eval = config.system.num_updates // config.arch.num_evaluation
@@ -666,12 +666,13 @@ def hydra_entry_point(cfg: DictConfig) -> float:
     assert len(param_spaces) == 10
 
     carbs = CARBS(carbs_params, param_spaces)
-    for _ in range(200):
+    for _ in range(40):
         system_seed = np.random.randint(1, 1e6)
         env_seed = np.random.randint(1, 1e6)
 
         cfg.system.seed = int(system_seed)
-        cfg.env.scenario.task_config.key_integer = int(env_seed)
+        if cfg.env.env_name == "GeneralMatrax":
+            cfg.env.scenario.task_config.key_integer = int(env_seed)
 
         suggestion = carbs.suggest().suggestion
         cfg.system.actor_lr = suggestion["actor_lr"]
