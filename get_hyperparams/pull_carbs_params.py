@@ -26,7 +26,15 @@ from tqdm import tqdm
 
 _env_scenario_registry = {
     "generalised_matrax": [
-        "matrax-5-ag-5-act",
+        "matrax-2-ag-4-act",
+        "matrax-3-ag-4-act",
+        "matrax-4-ag-4-act",
+        "matrax-5-ag-4-act",
+        "matrax-6-ag-4-act",
+        "matrax-7-ag-4-act",
+    ],
+    "matrax": [
+        "Climbing-stateless-v0",
     ],
 }
 
@@ -80,10 +88,11 @@ env_renaming = {
     "LevelBasedForaging": "lbf",
     "Cleaner": "cleaner",
     "GeneralMatrax": "generalised-matrax",
+    "Matrax": "matrax",
 }
 
 NEPTUNE_TAGS = [
-    "first-carbs-sweep",
+    "matrix-games-carbs-sweep",
 ]
 
 algo_column_name = "config/logger/system_name"
