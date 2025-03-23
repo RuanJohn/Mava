@@ -85,7 +85,7 @@ def get_script_contents(
 
     system_run_file = system_name_to_run_file[system_name]
 
-    neptune_tag = '["more-matrix-games-shadowed"]'
+    neptune_tag = '["fixed-matrix-games-shadowed"]'
 
     num_updates = 2440
     num_evals = 122
