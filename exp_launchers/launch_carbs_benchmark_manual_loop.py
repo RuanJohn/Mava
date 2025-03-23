@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# NOTE: changed to iterate over the dataframe. Not manually over num_agents, num_actions
-
 import argparse
 import logging
 import subprocess
@@ -34,30 +32,17 @@ system_name_to_run_file = {
     "ff_ppo_central_factored": "mava/systems/ppo/anakin/ff_ppo_central_factored.py",
 }
 
-task_name_to_num_agents_num_actions = {
-    "matrax-2-4-act": (2, 4),
-    "matrax-3-4-act": (3, 4),
-    "matrax-4-4-act": (4, 4),
-    "matrax-5-4-act": (5, 4),
-    "matrax-6-4-act": (6, 4),
-    "matrax-7-4-act": (7, 4),
-}
-
+num_agents = [2, 3, 4, 5, 6, 7]
+num_actions = [4]
 env_seeds = [40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
-
-
-def get_num_agents_num_actions(task_name: str) -> tuple:
-    return task_name_to_num_agents_num_actions[task_name]
 
 
 def safe_cast(value: Any, type_func: Any) -> Any:
     return type_func(value) if pd.notna(value) else value
 
 
-def should_run(params_system_name: str, system_name_to_run: str, task_name: str) -> bool:
-    if (params_system_name == system_name_to_run) and (
-        task_name in task_name_to_num_agents_num_actions
-    ):
+def should_run(params_system_name: str, system_name_to_run: str) -> bool:
+    if params_system_name == system_name_to_run:
         return True
     return False
 
@@ -152,26 +137,26 @@ if __name__ == "__main__":
 
     for _, row in best_hyper_params.iterrows():
         system_name = row["system_name"]
-        _scenario = row["task"]
-        if should_run(system_name, args.system_name, _scenario):
-            num_agent, num_action = get_num_agents_num_actions(_scenario)
+        if should_run(system_name, args.system_name):
             for system_seed in args.system_seeds:
-                for env_seed in env_seeds:
-                    script_contents = get_script_contents(
-                        df_row=row,
-                        system_seed=system_seed,
-                        num_agent=num_agent,
-                        num_action=num_action,
-                        env_seed=env_seed,
-                        system_name=system_name,
-                    )
-                    with open("run.sh", "w") as f:
-                        f.write(script_contents)
-                    try:
-                        logging.info(f"Launching experiment - {system_name}")
-                        subprocess.run(["./run.sh"], check=True)
-                        logging.info("Experiment launched successfully")
-                        time.sleep(5)
+                for num_agent in num_agents:
+                    for num_action in num_actions:
+                        for env_seed in env_seeds:
+                            script_contents = get_script_contents(
+                                df_row=row,
+                                system_seed=system_seed,
+                                num_agent=num_agent,
+                                num_action=num_action,
+                                env_seed=env_seed,
+                                system_name=system_name,
+                            )
+                            with open("run.sh", "w") as f:
+                                f.write(script_contents)
+                            try:
+                                logging.info(f"Launching experiment - {system_name}")
+                                subprocess.run(["./run.sh"], check=True)
+                                logging.info("Experiment launched successfully")
+                                time.sleep(5)
 
-                    except subprocess.CalledProcessError as e:
-                        logging.error(f"Error launching the experiment: {e}")
+                            except subprocess.CalledProcessError as e:
+                                logging.error(f"Error launching the experiment: {e}")
