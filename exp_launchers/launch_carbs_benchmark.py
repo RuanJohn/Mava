@@ -43,6 +43,15 @@ task_name_to_num_agents_num_actions = {
     "matrax-7-4-act": (7, 4),
 }
 
+tasks_to_run = [
+    "matrax-2-4-act",
+    "matrax-3-4-act",
+    "matrax-4-4-act",
+    "matrax-5-4-act",
+    "matrax-6-4-act",
+    "matrax-7-4-act",
+]
+
 env_seeds = [40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
 
 
@@ -55,9 +64,7 @@ def safe_cast(value: Any, type_func: Any) -> Any:
 
 
 def should_run(params_system_name: str, system_name_to_run: str, task_name: str) -> bool:
-    if (params_system_name == system_name_to_run) and (
-        task_name in task_name_to_num_agents_num_actions
-    ):
+    if (params_system_name == system_name_to_run) and (task_name in tasks_to_run):
         return True
     return False
 
