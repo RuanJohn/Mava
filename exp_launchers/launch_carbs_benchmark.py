@@ -85,7 +85,7 @@ def get_script_contents(
 
     system_run_file = system_name_to_run_file[system_name]
 
-    neptune_tag = '["fixed-matrix-games-shadowed"]'
+    neptune_tag = '["fixed-matrix-games-explore"]'
 
     num_updates = 2440
     num_evals = 122
@@ -100,7 +100,7 @@ def get_script_contents(
         env.scenario.task_name={task_name} env.scenario.task_config.num_agents={num_agent} \\
         env.scenario.task_config.num_actions={num_action} \\
         env.scenario.task_config.key_integer={env_seed} \\
-        env.kwargs.generate_shadowed_payoffs=True \\
+        env.kwargs.generate_shadowed_payoffs=False \\
         arch.num_envs=8 \\
         logger.kwargs.neptune_tag='{neptune_tag}' \\
         logger.use_neptune=True \\
