@@ -45,11 +45,11 @@ task_name_to_num_agents_num_actions = {
 
 tasks_to_run = [
     "matrax-2-4-act",
-    "matrax-3-4-act",
-    "matrax-4-4-act",
-    "matrax-5-4-act",
-    "matrax-6-4-act",
-    "matrax-7-4-act",
+    # "matrax-3-4-act",
+    # "matrax-4-4-act",
+    # "matrax-5-4-act",
+    # "matrax-6-4-act",
+    # "matrax-7-4-act",
 ]
 
 env_seeds = [40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
@@ -85,7 +85,7 @@ def get_script_contents(
 
     system_run_file = system_name_to_run_file[system_name]
 
-    neptune_tag = '["fixed-matrix-games-explore"]'
+    neptune_tag = '["fixed-matrix-games-shadowed"]'
 
     num_updates = 2440
     num_evals = 122
@@ -100,7 +100,7 @@ def get_script_contents(
         env.scenario.task_name={task_name} env.scenario.task_config.num_agents={num_agent} \\
         env.scenario.task_config.num_actions={num_action} \\
         env.scenario.task_config.key_integer={env_seed} \\
-        env.kwargs.generate_shadowed_payoffs=False \\
+        env.kwargs.generate_shadowed_payoffs=True \\
         arch.num_envs=8 \\
         logger.kwargs.neptune_tag='{neptune_tag}' \\
         logger.use_neptune=True \\
