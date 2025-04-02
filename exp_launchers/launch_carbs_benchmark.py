@@ -44,15 +44,26 @@ task_name_to_num_agents_num_actions = {
 }
 
 tasks_to_run = [
-    "matrax-2-4-act",
+    # "matrax-2-4-act",
     # "matrax-3-4-act",
     # "matrax-4-4-act",
     # "matrax-5-4-act",
     # "matrax-6-4-act",
-    # "matrax-7-4-act",
+    "matrax-7-4-act",
 ]
 
-env_seeds = [40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
+env_seeds = [
+    # 40,
+    # 41,
+    # 42,
+    # 43,
+    # 44,
+    # 45,
+    # 46,
+    47,
+    48,
+    49,
+]
 
 
 def get_num_agents_num_actions(task_name: str) -> tuple:
