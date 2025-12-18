@@ -44,6 +44,27 @@ class TabularPolicy(nn.Module):
 
         return IdentityTransformation(distribution=tfd.Categorical(logits=batched_logits))
 
+class FactoredTabularPolicy(nn.Module):
+    num_agents: int
+    num_actions: int
+
+    def setup(self) -> None:
+
+        self.joint_action_space = self.num_agents * self.num_actions
+        # Initialize the logits for the factored tabular policy
+        self.policy_logits = self.param(
+            "policy_logits", nn.initializers.zeros, (1, self.joint_action_space)
+        )
+
+    def __call__(self, batch_size: int) -> tfd.Distribution:
+        # Repeat the policy_logits for each item in the batch
+        batched_logits = jnp.repeat(self.policy_logits, batch_size, axis=0)
+
+        # Split the logits from (batch, num_actions) to (batch, num_agents, num_actions)
+        batched_logits = batched_logits.reshape(batch_size, self.num_agents, self.num_actions)
+
+        return IdentityTransformation(distribution=tfd.Categorical(logits=batched_logits))
+
 
 class DiscreteActionHead(nn.Module):
     """Discrete Action Head"""
