@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from typing import Optional
+from typing import Optional, Tuple
 
 import chex
 import jax
@@ -64,6 +64,67 @@ class FactoredTabularPolicy(nn.Module):
         batched_logits = batched_logits.reshape(batch_size, self.num_agents, self.num_actions)
 
         return IdentityTransformation(distribution=tfd.Categorical(logits=batched_logits))
+
+class AutoregressiveTabularPolicy(nn.Module):
+    num_agents: int
+    num_actions: int
+
+    def setup(self) -> None:
+        N, A = self.num_agents, self.num_actions
+        self.tables = []
+        for i in range(N):
+            self.tables.append(
+                self.param(
+                    f"policy_logits_step_{i}",
+                    nn.initializers.zeros,
+                    (A**i, A),  # π(a_i | a_<i) table
+                )
+            )
+
+    def __call__(self, sample_key: chex.PRNGKey, batch_size: int) -> Tuple[chex.Array, chex.Array]:
+        """
+        Returns:
+          actions: (B, N) int32
+          logp:    (B,)   float32
+        """
+        N = self.num_agents
+        A = jnp.int32(self.num_actions)
+        B = batch_size
+
+        # One RNG key per (agent step, batch element)
+        keys = jax.random.split(sample_key, N * B).reshape(N, B, 2)
+
+        def step(carry, inputs):
+            idx, logp = carry                  # idx: (B,), logp: (B,)
+            i, step_keys = inputs              # step_keys: (B, 2)
+
+            table = self.tables[i]             # (A**i, A)
+            logits = table[idx]                # (B, A)
+
+            dist = tfd.Categorical(logits=logits)
+            a = dist.sample(seed=step_keys)    # (B,)
+            a = a.astype(jnp.int32)
+
+            logp = logp + dist.log_prob(a)     # (B,)
+
+            # base-A update for each batch element
+            idx = idx * A + a                  # (B,)
+
+            return (idx, logp), a
+
+        init_idx = jnp.zeros((B,), dtype=jnp.int32)
+        init_logp = jnp.zeros((B,), dtype=jnp.float32)
+
+        (final_idx, final_logp), actions_TB = jax.lax.scan(
+            step,
+            (init_idx, init_logp),
+            (jnp.arange(N), keys),
+        )
+
+        actions = jnp.transpose(actions_TB, (1, 0))  # (B, N)
+        return actions, final_logp
+
+
 
 
 class DiscreteActionHead(nn.Module):
