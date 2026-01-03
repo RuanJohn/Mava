@@ -28,6 +28,7 @@ system_num_to_name = {
     6: ["ff_mappo"],
     7: ["ff_sable"],
     8: ["ff_ppo_central"],
+    9: ["ff_ppo_central_autoreg_tabular"],
 }
 
 env_seed_to_system_seeds = {
@@ -85,6 +86,8 @@ def get_script_contents(
         system_run_file = "mava/systems/ppo/anakin/ff_ppo_central_factored_tabular.py"
     elif system_name == "ff_ppo_central_factored":
         system_run_file = "mava/systems/ppo/anakin/ff_ppo_central_factored.py"
+    elif system_name == "ff_ppo_central_autoreg_tabular":
+        system_run_file = "mava/systems/ppo/anakin/ff_ppo_central_autoreg_tabular.py"
 
     neptune_tag = '["explore-same-param-rerun"]'
     # neptune_tag = '["test-tpu-rerun"]'
