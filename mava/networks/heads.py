@@ -197,6 +197,137 @@ class AutoregressiveTabularPolicy(nn.Module):
         return final_logp
 
 
+class AutoregressiveChainedTabularPolicy(nn.Module):
+    num_agents: int
+    num_actions: int
+
+    def setup(self) -> None:
+        N, A = self.num_agents, self.num_actions
+        # Use a tuple instead of dict to allow JIT-compatible indexing with jax.lax.switch
+        self.tables = tuple(
+            self.param(f"policy_logits_step_{i}", nn.initializers.zeros, (A, A)) if i > 0 else self.param(f"policy_logits_step_{i}", nn.initializers.zeros, (1, A))
+            for i in range(N)
+        )
+
+    def act_fn(self, sample_key: chex.PRNGKey, batch_size: int) -> Tuple[chex.Array, chex.Array]:
+        """
+        Returns:
+          actions: (B, N) int32
+          logp:    (B,)   float32
+        """
+        N = self.num_agents
+        A = jnp.int32(self.num_actions)
+        B = batch_size
+
+        # Split key into N keys (one per agent step), then split each for batch elements
+        # This avoids needing concrete B for the initial split
+        step_keys_base = jax.random.split(sample_key, N)  # (N, 2)
+
+        # Extract tables tuple for closure capture
+        tables_tuple = self.tables
+
+        def step(carry, inputs):
+            idx, logp = carry  # idx: (B,), logp: (B,)
+            i, step_key_base = inputs  # step_key_base: (2,)
+
+            # Generate keys for each batch element using fold_in
+            # step_key_base is already unique per step, just fold in batch index
+            # B is static (from outer scope), so we can use it directly
+            batch_indices = jnp.arange(B, dtype=jnp.int32)
+            step_keys = jax.vmap(lambda batch_idx: jax.random.fold_in(step_key_base, batch_idx))(
+                batch_indices
+            )  # (B, 2)
+
+            # Compute logits for each table (all have same output shape (B, A))
+            # Then use jax.lax.switch to select the correct one based on i
+            # Use default argument to properly capture j in closure
+            branches = tuple(lambda j=j: jnp.take(tables_tuple[j], idx, axis=0) for j in range(N))
+            logits = jax.lax.switch(i, branches)  # (B, A)
+
+            # Sample actions: use vmap to sample for each batch element with its own key
+            def sample_single(logit, key):
+                dist = tfd.Categorical(logits=logit[None, :])  # Add batch dim
+                return dist.sample(seed=key)[0]  # Remove batch dim and return scalar
+
+            a = jax.vmap(sample_single)(logits, step_keys)  # (B,)
+            a = a.astype(jnp.int32)
+
+            # Compute log probabilities (can use batched distribution)
+            dist = tfd.Categorical(logits=logits)
+
+            logp = logp + dist.log_prob(a)  # (B,)
+
+            # previous action update for each batch element
+            idx = a  # (B,)
+
+            return (idx, logp), a
+
+        init_idx = jnp.zeros((B,), dtype=jnp.int32)
+        init_logp = jnp.zeros((B,), dtype=jnp.float32)
+
+        (final_idx, final_logp), actions_TB = jax.lax.scan(
+            step,
+            (init_idx, init_logp),
+            (jnp.arange(N), step_keys_base),
+        )
+
+        actions = jnp.transpose(actions_TB, (1, 0))  # (B, N)
+        return actions, final_logp
+
+    def train_fn(self, sample_key: chex.PRNGKey, batch_size: int, action: chex.Array) -> chex.Array:
+        """
+        Compute log probabilities for given actions during training.
+
+        Args:
+            sample_key: PRNG key (unused, kept for API consistency)
+            batch_size: Batch size
+            action: Actions array of shape (B, N) where B is batch size and N is num_agents
+
+        Returns:
+          logp: (B,) float32 - log probabilities for the given actions
+        """
+        N = self.num_agents
+        A = jnp.int32(self.num_actions)
+        B = batch_size
+
+        # Transpose actions to (N, B) to match scan structure
+        actions_TB = jnp.transpose(action, (1, 0))  # (N, B)
+
+        # Extract tables tuple for closure capture
+        tables_tuple = self.tables
+
+        def step(carry, inputs):
+            idx, logp = carry  # idx: (B,), logp: (B,)
+            i, a = inputs  # a: (B,) - actions for this agent step
+
+            # Compute logits for each table (all have same output shape (B, A))
+            # Then use jax.lax.switch to select the correct one based on i
+            # Use default argument to properly capture j in closure
+            branches = tuple(lambda j=j: jnp.take(tables_tuple[j], idx, axis=0) for j in range(N))
+            logits = jax.lax.switch(i, branches)  # (B, A)
+
+            # Compute log probabilities for the given actions (not sampling)
+            dist = tfd.Categorical(logits=logits)
+            a = a.astype(jnp.int32)  # Ensure int32
+            logp = logp + dist.log_prob(a)  # (B,)
+
+            # previous action update for each batch element
+            idx = a  # (B,)
+
+            return (idx, logp), None  # Don't need to return actions
+
+        init_idx = jnp.zeros((B,), dtype=jnp.int32)
+        init_logp = jnp.zeros((B,), dtype=jnp.float32)
+
+        (final_idx, final_logp), _ = jax.lax.scan(
+            step,
+            (init_idx, init_logp),
+            (jnp.arange(N), actions_TB),
+        )
+
+        return final_logp
+
+
 class DiscreteActionHead(nn.Module):
     """Discrete Action Head"""
 

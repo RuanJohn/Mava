@@ -1,0 +1,11 @@
+defaults:
+  - logger: logger
+  - arch: anakin
+  - system: ppo/ff_ppo_central_autoreg_chained_tabular
+  - network: mlp  # [mlp, continuous_mlp, cnn]
+  - env: generalised-matrax # [cleaner, connector, gigastep, lbf, mabrax, matrax, rware, smax]
+  - _self_
+
+hydra:
+  searchpath:
+    - file://mava/configs
