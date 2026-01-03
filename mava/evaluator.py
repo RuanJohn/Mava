@@ -202,6 +202,22 @@ def make_ff_eval_act_fn(actor_apply_fn: ActorApply, config: DictConfig) -> EvalA
     return eval_act_fn
 
 
+def make_autoreg_ff_tabular_eval_act_fn(
+    actor_apply_fn: ActorApply, config: DictConfig
+) -> EvalActFn:
+    """Makes an act function that conforms to the evaluator API given a standard
+    feed forward mava actor network."""
+
+    def eval_act_fn(
+        params: FrozenDict, timestep: TimeStep, key: PRNGKey, actor_state: ActorState
+    ) -> Tuple[Action, Dict]:
+        batch_size = timestep.observation.agents_view.shape[0]
+        action, _ = actor_apply_fn(params, key, batch_size, method="act_fn")
+        return action, {}
+
+    return eval_act_fn
+
+
 def make_ff_tabular_eval_act_fn(actor_apply_fn: ActorApply, config: DictConfig) -> EvalActFn:
     """Makes an act function that conforms to the evaluator API given a standard
     feed forward mava actor network."""
