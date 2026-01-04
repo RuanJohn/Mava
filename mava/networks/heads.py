@@ -537,7 +537,12 @@ class CentralisedContinuousActionHead(nn.Module):
             # L is lower triangular with positive diagonal
             # We store the lower triangular part (including diagonal) as a flat vector
             tril_size = self.action_dim * (self.action_dim + 1) // 2
-            self.tril_params = self.param("tril_params", nn.initializers.zeros, (tril_size,))
+
+            # Use small random initialization instead of zeros for numerical stability
+            def small_init(key, shape):
+                return jax.random.normal(key, shape) * 0.01
+
+            self.tril_params = self.param("tril_params", small_init, (tril_size,))
 
     @nn.compact
     def __call__(
@@ -581,6 +586,12 @@ class CentralisedContinuousActionHead(nn.Module):
                 diag_cov = diag_cov[None, ...]
             cov = cov_low_rank + diag_cov
 
+            # CRITICAL FIX: Add regularization to ensure positive definiteness
+            eye_reg = jnp.eye(self.action_dim) * (self.min_scale**2)
+            for _ in range(len(batch_shape)):
+                eye_reg = eye_reg[None, ...]
+            cov = cov + eye_reg
+
             # Compute Cholesky decomposition (works on last two dimensions)
             tril = jnp.linalg.cholesky(cov)  # (..., action_dim, action_dim)
 
@@ -590,27 +601,28 @@ class CentralisedContinuousActionHead(nn.Module):
             # Reshape tril_params to lower triangular matrix
             tril_flat = self.tril_params  # (tril_size,)
 
-            # Create lower triangular mask
-            tril_mask = jnp.tril(jnp.ones((self.action_dim, self.action_dim)))
-
-            # Create index mapping: map flat vector to lower triangular positions
-            # We create a matrix where each position (i,j) with j <= i gets a unique index
+            # FIXED: Properly construct lower triangular matrix
+            # Create indices for lower triangular positions
             row_indices = jnp.arange(self.action_dim)[:, None]
             col_indices = jnp.arange(self.action_dim)[None, :]
-            # For lower triangular: index = i*(i+1)//2 + j where j <= i
-            tril_indices = row_indices * (row_indices + 1) // 2 + col_indices
-            # Only use indices in lower triangular part, set upper to 0
-            tril_indices = jnp.where(tril_mask, tril_indices, 0)
+            # Lower triangular index formula: i*(i+1)//2 + j for j <= i
+            tril_idx_matrix = row_indices * (row_indices + 1) // 2 + col_indices
+            # Create mask for valid lower triangular positions
+            valid_mask = col_indices <= row_indices
 
-            # Map flat params to matrix using advanced indexing
-            tril = jnp.take(tril_flat, tril_indices, mode="clip")
+            # Use gather to properly index into tril_flat
+            # For invalid positions, use index 0 (will be masked out)
+            safe_indices = jnp.where(valid_mask, tril_idx_matrix, 0)
+            tril = jnp.take(tril_flat, safe_indices, mode="fill", fill_value=0.0)
             # Zero out upper triangular part
-            tril = jnp.where(tril_mask, tril, 0.0)
+            tril = jnp.where(valid_mask, tril, 0.0)
 
-            # Ensure diagonal is positive and add minimum scale
-            diag_vals = jnp.diag(tril)
+            # CRITICAL FIX: Ensure diagonal is positive and add minimum scale
+            diag_indices = jnp.arange(self.action_dim)
+            diag_vals = tril[diag_indices, diag_indices]
             diag_vals = jax.nn.softplus(diag_vals) + self.min_scale
-            tril = tril * (1 - jnp.eye(self.action_dim)) + jnp.diag(diag_vals)
+            # Update diagonal properly using .at[].set()
+            tril = tril.at[diag_indices, diag_indices].set(diag_vals)
 
             # Broadcast to batch shape
             batch_shape = loc.shape[:-1]
