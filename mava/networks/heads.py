@@ -22,7 +22,11 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 from flax import linen as nn
 from flax.linen.initializers import orthogonal
 
-from mava.networks.distributions import IdentityTransformation, TanhTransformedDistribution
+from mava.networks.distributions import (
+    IdentityTransformation,
+    MultivariateTanhTransformedDistribution,
+    TanhTransformedDistribution,
+)
 from mava.utils.centralised_controller import compute_joint_action_mask, get_all_action_combinations
 
 
@@ -205,7 +209,9 @@ class AutoregressiveChainedTabularPolicy(nn.Module):
         N, A = self.num_agents, self.num_actions
         # Use a tuple instead of dict to allow JIT-compatible indexing with jax.lax.switch
         self.tables = tuple(
-            self.param(f"policy_logits_step_{i}", nn.initializers.zeros, (A, A)) if i > 0 else self.param(f"policy_logits_step_{i}", nn.initializers.zeros, (1, A))
+            self.param(f"policy_logits_step_{i}", nn.initializers.zeros, (A, A))
+            if i > 0
+            else self.param(f"policy_logits_step_{i}", nn.initializers.zeros, (1, A))
             for i in range(N)
         )
 
@@ -485,3 +491,133 @@ class ContinuousActionHead(nn.Module):
             TanhTransformedDistribution(distribution),
             reinterpreted_batch_ndims=1,
         )
+
+
+class CentralisedContinuousActionHead(nn.Module):
+    """Truly Centralised ContinuousActionHead using a multivariate Normal distribution.
+
+    Unlike ContinuousActionHead which uses independent Normal distributions for each
+    action dimension, this head uses a multivariate Normal with a full covariance
+    matrix. This allows the model to learn dependencies between all action dimensions
+    (across all agents), making it more similar to the fully centralised discrete case
+    where the joint action space is exponential in the number of agents.
+
+    The covariance matrix is parameterized using a Cholesky decomposition to ensure
+    positive definiteness. For efficiency with large action dimensions, a low-rank
+    approximation option is available.
+
+    Note: This network only handles the case where actions lie in the interval [-1, 1].
+    """
+
+    action_dim: int
+    min_scale: float = 1e-3
+    use_low_rank: bool = False  # If True, use low-rank covariance approximation
+    rank: Optional[int] = None  # Rank for low-rank approximation (default: action_dim // 2)
+
+    # These are not needed but we keep them to keep the API consistent with the discrete case.
+    is_central_controller: bool = False
+    num_agents: Optional[int] = None
+    num_indiv_actions: Optional[int] = None
+
+    def setup(self) -> None:
+        self.mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01))
+
+        if self.use_low_rank:
+            # Low-rank covariance: Cov = L @ L.T + diag(diag_scale^2)
+            rank = self.rank if self.rank is not None else max(1, self.action_dim // 2)
+            # Output a matrix of shape (action_dim, rank) per observation
+            self.low_rank_matrix = nn.Dense(
+                self.action_dim * rank, kernel_init=orthogonal(0.01), name="low_rank_matrix"
+            )
+            self.log_diag_scale = self.param(
+                "log_diag_scale", nn.initializers.zeros, (self.action_dim,)
+            )
+        else:
+            # Full covariance: parameterize Cholesky factor L where Cov = L @ L.T
+            # L is lower triangular with positive diagonal
+            # We store the lower triangular part (including diagonal) as a flat vector
+            tril_size = self.action_dim * (self.action_dim + 1) // 2
+            self.tril_params = self.param("tril_params", nn.initializers.zeros, (tril_size,))
+
+    @nn.compact
+    def __call__(
+        self, obs_embedding: chex.Array, action_mask: chex.Array
+    ) -> tfd.TransformedDistribution:
+        """Action selection for continuous action space environments with full covariance.
+
+        Args:
+        ----
+            obs_embedding: Observation embedding.
+            action_mask: Legal action mask for masked distributions. NOTE: In the
+                continuous case, the action mask is not used but we still pass it in
+                to keep the API consistent between the discrete and continuous cases.
+
+        Returns:
+        -------
+            tfd.TransformedDistribution: Transformed multivariate normal distribution.
+
+        """
+        del action_mask
+        loc = self.mean(obs_embedding)  # (..., action_dim)
+
+        if self.use_low_rank:
+            # Low-rank covariance approximation: Cov = L @ L.T + diag(diag_scale^2)
+            rank = self.rank if self.rank is not None else max(1, self.action_dim // 2)
+            L_flat = self.low_rank_matrix(obs_embedding)  # (..., action_dim * rank)
+            L_full = L_flat.reshape(
+                loc.shape[:-1] + (self.action_dim, rank)
+            )  # (..., action_dim, rank)
+
+            diag_scale = jax.nn.softplus(self.log_diag_scale) + self.min_scale  # (action_dim,)
+
+            # Construct covariance: L_full @ L_full.T + diag(diag_scale^2)
+            cov_low_rank = jnp.einsum(
+                "...ij,...kj->...ik", L_full, L_full
+            )  # (..., action_dim, action_dim)
+            diag_cov = jnp.diag(diag_scale**2)  # (action_dim, action_dim)
+            # Broadcast diag_cov to match batch shape
+            batch_shape = loc.shape[:-1]
+            for _ in range(len(batch_shape)):
+                diag_cov = diag_cov[None, ...]
+            cov = cov_low_rank + diag_cov
+
+            # Compute Cholesky decomposition (works on last two dimensions)
+            tril = jnp.linalg.cholesky(cov)  # (..., action_dim, action_dim)
+
+            distribution = tfd.MultivariateNormalTriL(loc=loc, scale_tril=tril)
+        else:
+            # Full covariance using Cholesky parameterization
+            # Reshape tril_params to lower triangular matrix
+            tril_flat = self.tril_params  # (tril_size,)
+
+            # Create lower triangular mask
+            tril_mask = jnp.tril(jnp.ones((self.action_dim, self.action_dim)))
+
+            # Create index mapping: map flat vector to lower triangular positions
+            # We create a matrix where each position (i,j) with j <= i gets a unique index
+            row_indices = jnp.arange(self.action_dim)[:, None]
+            col_indices = jnp.arange(self.action_dim)[None, :]
+            # For lower triangular: index = i*(i+1)//2 + j where j <= i
+            tril_indices = row_indices * (row_indices + 1) // 2 + col_indices
+            # Only use indices in lower triangular part, set upper to 0
+            tril_indices = jnp.where(tril_mask, tril_indices, 0)
+
+            # Map flat params to matrix using advanced indexing
+            tril = jnp.take(tril_flat, tril_indices, mode="clip")
+            # Zero out upper triangular part
+            tril = jnp.where(tril_mask, tril, 0.0)
+
+            # Ensure diagonal is positive and add minimum scale
+            diag_vals = jnp.diag(tril)
+            diag_vals = jax.nn.softplus(diag_vals) + self.min_scale
+            tril = tril * (1 - jnp.eye(self.action_dim)) + jnp.diag(diag_vals)
+
+            # Broadcast to batch shape
+            batch_shape = loc.shape[:-1]
+            for _ in range(len(batch_shape)):
+                tril = tril[None, ...]
+
+            distribution = tfd.MultivariateNormalTriL(loc=loc, scale_tril=tril)
+
+        # Use MultivariateTanhTransformedDistribution for multivariate distributions
+        return MultivariateTanhTransformedDistribution(distribution)

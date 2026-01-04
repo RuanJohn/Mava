@@ -27,10 +27,17 @@ def get_action_head(
     action_types: Union[Spec, Space], factored_action_space: bool = False
 ) -> Tuple[Dict[str, str], str]:
     """Returns the appropriate action head config based on the environment action_spec."""
-    if isinstance(action_types, discrete_spaces) and factored_action_space:
+    is_discrete = isinstance(action_types, discrete_spaces)
+    is_continuous = not is_discrete
+
+    if is_discrete and factored_action_space:
         return {"_target_": "mava.networks.heads.FactoredDiscreteActionHead"}, _DISCRETE
 
-    elif isinstance(action_types, discrete_spaces):
+    elif is_discrete:
         return {"_target_": "mava.networks.heads.DiscreteActionHead"}, _DISCRETE
 
-    return {"_target_": "mava.networks.heads.ContinuousActionHead"}, _CONTINUOUS
+    elif is_continuous and factored_action_space:
+        return {"_target_": "mava.networks.heads.ContinuousActionHead"}, _CONTINUOUS
+
+    else:
+        return {"_target_": "mava.networks.heads.CentralisedContinuousActionHead"}, _CONTINUOUS

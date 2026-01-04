@@ -91,6 +91,53 @@ class TanhTransformedDistribution(tfd.TransformedDistribution):
         return td_properties
 
 
+class MultivariateTanhTransformedDistribution(tfd.TransformedDistribution):
+    """A multivariate distribution transformed using element-wise `tanh` function.
+
+    This is similar to TanhTransformedDistribution but works with multivariate
+    distributions by applying tanh element-wise to each dimension.
+    """
+
+    def __init__(
+        self,
+        distribution: tfd.Distribution,
+        threshold: float = 0.999,
+        validate_args: bool = False,
+    ) -> None:
+        """Initialises the MultivariateTanhTransformedDistribution.
+
+        Args:
+        ----
+          distribution: The base multivariate distribution to be transformed.
+          threshold: Clipping value for the action when computing the log_prob.
+          validate_args: Whether to validate input with respect to distribution parameters.
+
+        """
+        # Apply tanh element-wise - tanh bijector works element-wise by default for vectors
+        tanh_bijector = tfb.Tanh()
+        super().__init__(
+            distribution=distribution, bijector=tanh_bijector, validate_args=validate_args
+        )
+        self._threshold = threshold
+
+    def log_prob(self, event: chex.Array) -> chex.Array:
+        """Computes the log probability of the event under the transformed distribution."""
+        # Clip event to threshold
+        event = jnp.clip(event, -self._threshold, self._threshold)
+        return super().log_prob(event)
+
+    def mode(self) -> chex.Array:
+        """Returns the mode of the distribution."""
+        return self.bijector.forward(self.distribution.mode())
+
+    def entropy(self, seed: chex.PRNGKey = None) -> chex.Array:
+        """Computes an estimation of the entropy using a sample of the log_det_jacobian."""
+        sample = self.distribution.sample(seed=seed)
+        return self.distribution.entropy() + self.bijector.forward_log_det_jacobian(
+            sample, event_ndims=1
+        )
+
+
 class MaskedEpsGreedyDistribution(tfd.Categorical):
     """Computes an epsilon-greedy distribution for each action choice. There are two
     components in the distribution:
