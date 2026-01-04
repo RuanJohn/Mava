@@ -592,8 +592,19 @@ class CentralisedContinuousActionHead(nn.Module):
                 eye_reg = eye_reg[None, ...]
             cov = cov + eye_reg
 
+            # Additional safety: add trace-based regularization for better conditioning
+            trace = jnp.trace(cov, axis1=-2, axis2=-1)[..., None, None]
+            cov = cov + jnp.eye(self.action_dim) * trace * 1e-6
+
             # Compute Cholesky decomposition (works on last two dimensions)
             tril = jnp.linalg.cholesky(cov)  # (..., action_dim, action_dim)
+
+            # Safety check: replace any NaN or Inf with identity * min_scale
+            has_nan_inf = jnp.any(jnp.isnan(tril) | jnp.isinf(tril), axis=(-2, -1), keepdims=True)
+            safe_tril = jnp.eye(self.action_dim) * self.min_scale
+            for _ in range(len(batch_shape)):
+                safe_tril = safe_tril[None, ...]
+            tril = jnp.where(has_nan_inf, safe_tril, tril)
 
             distribution = tfd.MultivariateNormalTriL(loc=loc, scale_tril=tril)
         else:
@@ -622,6 +633,13 @@ class CentralisedContinuousActionHead(nn.Module):
             diag_vals = tril[diag_indices, diag_indices]
             diag_vals = jax.nn.softplus(diag_vals) + self.min_scale
             # Update diagonal properly using .at[].set()
+            tril = tril.at[diag_indices, diag_indices].set(diag_vals)
+
+            # Clip tril values to prevent extreme values causing ill-conditioning
+            max_tril_val = 10.0
+            tril = jnp.clip(tril, -max_tril_val, max_tril_val)
+            # Re-apply diagonal constraint after clipping
+            diag_vals = jnp.clip(tril[diag_indices, diag_indices], self.min_scale, 5.0)
             tril = tril.at[diag_indices, diag_indices].set(diag_vals)
 
             # Broadcast to batch shape
