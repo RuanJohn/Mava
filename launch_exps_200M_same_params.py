@@ -40,7 +40,14 @@ env_seed_to_system_seeds = {
     46: ["8", "9"],
 }
 
-num_agents = [2, 3, 4, 5, 6, 7]
+num_agents = [
+    # 2, 
+    # 3, 
+    # 4, 
+    # 5, 
+    # 6,
+    7,
+]
 num_actions = [2, 3, 4, 5, 6, 7, 8]
 env_seeds = [42, 43, 44, 45, 46]
 num_steps = [
