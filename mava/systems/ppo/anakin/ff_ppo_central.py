@@ -605,12 +605,16 @@ def hydra_entry_point(cfg: DictConfig) -> float:
     # Run experiment.
     try:
         eval_performance = run_experiment(cfg)
-        print(f"{Fore.CYAN}{Style.BRIGHT}Central PPO experiment completed{Style.RESET_ALL}")
+        if np.isnan(eval_performance):
+            print(f"{Fore.YELLOW}{Style.BRIGHT}Central PPO experiment returned NaN{Style.RESET_ALL}")
+            eval_performance = -10000.0
+        else:
+            print(f"{Fore.CYAN}{Style.BRIGHT}Central PPO experiment completed{Style.RESET_ALL}")
+            return eval_performance
     except Exception as e:
         print(f"{Fore.RED}{Style.BRIGHT}Central PPO experiment failed: {e}{Style.RESET_ALL}")
         eval_performance = -10000.0
     return eval_performance
-
 
 if __name__ == "__main__":
     hydra_entry_point()
