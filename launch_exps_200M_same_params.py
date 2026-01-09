@@ -54,7 +54,7 @@ num_steps = [
     "200M",
     # "test",
 ]
-is_shadowed_list = [False]
+is_shadowed_list = [True]
 
 
 def get_eval_updates(step_count: str) -> Tuple[int, int]:
@@ -99,8 +99,8 @@ def get_script_contents(
     elif system_name == "ff_ppo_central_autoreg_chained_tabular":
         system_run_file = "mava/systems/ppo/anakin/ff_ppo_central_autoreg_chained_tabular.py"
 
-    neptune_tag = '["explore-same-param-rerun"]'
-    # neptune_tag = '["shadowed-same-param-rerun"]'
+    # neptune_tag = '["explore-same-param-rerun"]'
+    neptune_tag = '["shadowed-same-param-rerun"]'
     # neptune_tag = '["test-tpu-rerun"]'
     num_updates, num_evals = get_eval_updates(num_steps)
 
