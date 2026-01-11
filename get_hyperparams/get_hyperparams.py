@@ -74,11 +74,35 @@ _env_scenario_registry = {
         "con-10x10x10a",
         "con-15x15x23a",
     ],
+    "mpe": [
+        "simple_spread_3ag",
+        "simple_spread_5ag",
+        "simple_spread_10ag",
+    ],
 }
 
 # Define algo search spaces
 algo_search_spaces = {
-    "ff_ppo_central": [
+    # "ff_ppo_central": [
+    #     "config/system/actor_lr",
+    #     "config/system/critic_lr",
+    #     "config/system/ppo_epochs",
+    #     "config/system/num_minibatches",
+    #     "config/system/clip_eps",
+    #     "config/system/max_grad_norm",
+    #     "config/system/ent_coef",
+    # ],
+    # "rec_ppo_central": [
+    #     "config/system/actor_lr",
+    #     "config/system/critic_lr",
+    #     "config/system/ppo_epochs",
+    #     "config/system/num_minibatches",
+    #     "config/system/clip_eps",
+    #     "config/system/max_grad_norm",
+    #     "config/system/ent_coef",
+    #     "config/system/recurrent_chunk_size",
+    # ],
+    "ff_ppo_central_cont_full": [
         "config/system/actor_lr",
         "config/system/critic_lr",
         "config/system/ppo_epochs",
@@ -86,16 +110,6 @@ algo_search_spaces = {
         "config/system/clip_eps",
         "config/system/max_grad_norm",
         "config/system/ent_coef",
-    ],
-    "rec_ppo_central": [
-        "config/system/actor_lr",
-        "config/system/critic_lr",
-        "config/system/ppo_epochs",
-        "config/system/num_minibatches",
-        "config/system/clip_eps",
-        "config/system/max_grad_norm",
-        "config/system/ent_coef",
-        "config/system/recurrent_chunk_size",
     ],
 }
 
@@ -109,7 +123,7 @@ env_renaming = {
 }
 
 NEPTUNE_TAGS = [
-    "central-ppo-sweep",
+    "ff-ppo-central-full-cont-tune",
 ]
 
 algo_column_name = "config/logger/system_name"
@@ -146,8 +160,15 @@ def process_algorithm_task(algo_name, task, algo_df):
     target_metric = get_target_metric(task_df.iloc[0])
     absolute_metric = get_absolute_metric(target_metric)
 
-    # Sort by absolute metric and then by target metric
-    task_df = task_df.sort_values([absolute_metric, target_metric], ascending=[False, False])
+    # Sort by absolute metric (if it exists) and then by target metric
+    sort_columns = []
+    if absolute_metric in task_df.columns:
+        sort_columns.append(absolute_metric)
+    if target_metric in task_df.columns:
+        sort_columns.append(target_metric)
+    
+    if sort_columns:
+        task_df = task_df.sort_values(sort_columns, ascending=[False] * len(sort_columns))
 
     # Select top 10 runs
     top_10_runs = task_df.head(10).copy()
@@ -197,10 +218,12 @@ def process_algorithm_task(algo_name, task, algo_df):
     top_10_runs.loc[:, "time_series_total"] = time_series_total
 
     # Sort by all metrics
-    top_10_runs = top_10_runs.sort_values(
-        ["time_series_total", absolute_metric, target_metric],
-        ascending=[False, False, False],
-    )
+    sort_cols = ["time_series_total"]
+    if absolute_metric in top_10_runs.columns:
+        sort_cols.append(absolute_metric)
+    if target_metric in top_10_runs.columns:
+        sort_cols.append(target_metric)
+    top_10_runs = top_10_runs.sort_values(sort_cols, ascending=[False] * len(sort_cols))
 
     # Select the best run
     best_row = top_10_runs.iloc[0]
@@ -329,7 +352,7 @@ output_df = output_df[columns]
 output_df = process_csv(output_df)
 
 # Save the DataFrame to a CSV file
-file_name = "best_hyperparams/central_ppo.csv"
+file_name = "best_hyperparams/ff_ppo_central_full_cont.csv"
 output_df.to_csv(file_name, index=False)
 
 print(f"CSV file {file_name} has been created successfully.")

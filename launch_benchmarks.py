@@ -22,39 +22,48 @@ import pandas as pd
 
 systems_to_run = [
     # "ff_ppo_central",
-    "rec_ppo_central",
+    # "rec_ppo_central",
+    "ff_ppo_central_cont_full",
 ]
 
 scenarios_to_run = [
-    "smacv2_5_units",
-    "2s3z",
-    "con-7x7x5a",
-    "15x15-4p-5f",
-    "3s_vs_5z",
-    "15x15-4p-3f",
-    "10x10-3p-3f",
-    "8x8-2p-2f-coop",
-    "15x15-3p-5f",
-    "2s-8x8-2p-2f-coop",
-    "medium-6ag",
-    "xlarge-4ag",
-    "2s-10x10-3p-3f",
-    "xlarge-4ag-hard",
-    "con-5x5x3a",
-    "large-4ag-hard",
-    "small-4ag-hard",
-    "large-4ag",
-    "small-4ag",
-    "tiny-4ag-hard",
-    "medium-4ag-hard",
-    "medium-4ag",
-    "tiny-2ag",
-    "tiny-4ag",
-    "tiny-2ag-hard",
+    # "smacv2_5_units",
+    # "2s3z",
+    # "con-7x7x5a",
+    # "15x15-4p-5f",
+    # "3s_vs_5z",
+    # "15x15-4p-3f",
+    # "10x10-3p-3f",
+    # "8x8-2p-2f-coop",
+    # "15x15-3p-5f",
+    # "2s-8x8-2p-2f-coop",
+    # "medium-6ag",
+    # "xlarge-4ag",
+    # "2s-10x10-3p-3f",
+    # "xlarge-4ag-hard",
+    # "con-5x5x3a",
+    # "large-4ag-hard",
+    # "small-4ag-hard",
+    # "large-4ag",
+    # "small-4ag",
+    # "tiny-4ag-hard",
+    # "medium-4ag-hard",
+    # "medium-4ag",
+    # "tiny-2ag",
+    # "tiny-4ag",
+    # "tiny-2ag-hard",
+    "humanoid_9|8",
+    "ant_4x2",
+    "halfcheetah_6x1",
+    "hopper_3x1",
+    "walker2d_2x3",
+    "simple_spread_3ag",
+    "simple_spread_5ag",
+    "simple_spread_10ag",
 ]
 
 _system_run_file_map = {
-    "ff_ppo_central": "mava/systems/ppo/anakin/ff_ppo_central.py",
+    "ff_ppo_central_cont_full": "mava/systems/ppo/anakin/ff_ppo_central.py",
     "rec_ppo_central": "mava/systems/ppo/anakin/rec_ppo_central.py",
 }
 
@@ -89,9 +98,6 @@ def get_script_contents(
 
     job_name = f"benchmark-{scenario_job_name}"
 
-    if system_name == "rec_ppo_central":
-        job_name = f"rec-{job_name}"
-
     job_name = f'"{job_name}"'
 
     base_script = textwrap.dedent(f"""\
@@ -103,8 +109,6 @@ def get_script_contents(
     #SBATCH --job-name={job_name}
     #SBATCH --mail-user=dkcrua001@myuct.ac.za
     #SBATCH --mail-type=ALL
-
-    module load python/miniconda3-py3.12
 
     source /home/dkcrua001/Mava/.venv/bin/activate
 
@@ -120,10 +124,6 @@ def get_script_contents(
     system.num_minibatches={num_minibatches} \\
     system.ppo_epochs={ppo_epochs} \\
     """)
-
-    # Directly append without extra indentation
-    if system_name == "rec_ppo_central":
-        base_script += f"system.recurrent_chunk_size={recurrent_chunk_size} \\\n"
 
     # Append the environment-specific scenario line directly
     if env == "smax":
@@ -143,7 +143,7 @@ def safe_cast(value: Any, type_func: Callable) -> Any:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    df = pd.read_csv("best_hyperparams/central_ppo.csv")
+    df = pd.read_csv("best_hyperparams/ff_ppo_central_full_cont.csv")
 
     for _, row in df.iterrows():
         system_name = row["system_name"]

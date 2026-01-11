@@ -1,0 +1,9 @@
+system_name,task,env_name,run_id,episode_return,win_rate,time_series_total,ppo_epochs,max_grad_norm,ent_coef,clip_eps,critic_lr,actor_lr,num_minibatches,num_envs,num_updates,num_evaluation
+ff_ppo_central_cont_full,humanoid_9|8,mabrax,CEN-71183,531.2034912109375,,54838.40948486328,8,10.0,0.01,0.05,0.0005,0.0001,8,64,1220,122
+ff_ppo_central_cont_full,ant_4x2,mabrax,CEN-70910,4190.08935546875,,357916.696413517,4,5.0,0.01,0.2,0.00025,0.0005,4,64,1220,122
+ff_ppo_central_cont_full,simple_spread_10ag,mpe,CEN-71138,-47.80660629272461,,-6304.996562957764,2,5.0,1e-05,0.2,0.0005,0.00025,4,64,1220,122
+ff_ppo_central_cont_full,simple_spread_3ag,mpe,CEN-70944,-6.0804572105407715,,-1143.9285192489624,4,0.5,0.0,0.1,0.0001,0.00025,8,64,1220,122
+ff_ppo_central_cont_full,halfcheetah_6x1,mabrax,CEN-71266,3220.95458984375,,307160.01375198364,4,0.5,0.01,0.1,0.0005,0.00025,8,64,1220,122
+ff_ppo_central_cont_full,walker2d_2x3,mabrax,CEN-70986,663.4777221679688,,53518.19288635254,4,10.0,0.01,0.1,0.0005,0.0001,8,64,1220,122
+ff_ppo_central_cont_full,simple_spread_5ag,mpe,CEN-71042,-22.77119255065918,,-2297.21116065979,4,10.0,0.0,0.2,0.00025,0.0005,4,64,1220,122
+ff_ppo_central_cont_full,hopper_3x1,mabrax,CEN-71038,1481.903564453125,,166475.11544799805,8,10.0,0.01,0.1,0.0005,0.0001,8,64,1220,122
