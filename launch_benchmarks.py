@@ -86,7 +86,6 @@ def get_script_contents(
     num_minibatches: int,
     ppo_epochs: int,
     critic_lr: float,
-    recurrent_chunk_size: int,
 ) -> str:
     scenario_job_name = scenario
 
@@ -156,7 +155,6 @@ if __name__ == "__main__":
         num_minibatches = safe_cast(row["num_minibatches"], int)
         ppo_epochs = safe_cast(row["ppo_epochs"], int)
         critic_lr = safe_cast(row["critic_lr"], float)
-        recurrent_chunk_size = safe_cast(row["recurrent_chunk_size"], int)
 
         should_run = compute_should_run(system_name, scenario)
 
@@ -174,7 +172,6 @@ if __name__ == "__main__":
                 num_minibatches=num_minibatches,
                 ppo_epochs=ppo_epochs,
                 critic_lr=critic_lr,
-                recurrent_chunk_size=recurrent_chunk_size,
             )
             with open("run.sh", "w") as f:
                 f.write(script_contents)
