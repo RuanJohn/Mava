@@ -19,14 +19,19 @@ import textwrap
 import time
 
 tpu_idx_to_run_file = {
+    # PPO systems
     1: "mava/systems_tuning/ppo/anakin/ff_ppo_central_factored.py",
-    2: "mava/systems_tuning/ppo/anakin/rec_ppo_central_factored.py",
-    3: "mava/systems_tuning/ppo/anakin/rec_ppo_central.py",
-    4: "mava/systems_tuning/sable/anakin/ff_sable.py",
-    5: "mava/systems_tuning/sable/anakin/rec_sable.py",
-    6: "mava/systems_tuning/ppo/anakin/ff_ppo_central.py",
-    7: "mava/systems_tuning/ppo/anakin/ff_ippo_tabular_split.py",
-    8: "mava/systems_tuning/ppo/anakin/ff_ppo_central_tabular.py",
+    2: "mava/systems_tuning/ppo/anakin/ff_ppo_central.py",
+    3: "mava/systems_tuning/ppo/anakin/ff_ppo_central_tabular.py",
+    4: "mava/systems_tuning/ppo/anakin/ff_ppo_central_factored_tabular.py",
+    5: "mava/systems_tuning/ppo/anakin/ff_ppo_central_autoreg_tabular.py",
+    6: "mava/systems_tuning/ppo/anakin/ff_ppo_central_autoreg_chained_tabular.py",
+    7: "mava/systems_tuning/ppo/anakin/ff_mappo.py",
+    8: "mava/systems_tuning/ppo/anakin/ff_ippo.py",
+    9: "mava/systems_tuning/ppo/anakin/ff_ippo_tabular.py",
+    10: "mava/systems_tuning/ppo/anakin/ff_ippo_tabular_split.py",
+    # Sable
+    11: "mava/systems_tuning/sable/anakin/ff_sable.py",
 }
 
 
@@ -37,7 +42,7 @@ def get_script_contents(
 
     system_run_file = tpu_idx_to_run_file[tpu_idx]
 
-    neptune_tag = '["first-carbs-sweep"]'
+    neptune_tag = '["same-params-carbs-sweep"]'
 
     # TODO: use_netpune shoudl be True
     script = f"""\
