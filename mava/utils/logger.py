@@ -31,9 +31,11 @@ from jax.typing import ArrayLike
 from marl_eval.json_tools import JsonLogger as MarlEvalJsonLogger
 from neptune.types import GitRef
 from neptune.utils import stringify_unsupported
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from pandas.io.json._normalize import _simple_json_normalize as flatten_dict
 from tensorboard_logger import configure, log_value
+
+import wandb
 
 
 def get_repo_root() -> str:
@@ -235,6 +237,57 @@ class NeptuneLogger(BaseLogger):
         self.logger[f"metrics/metrics_{self.unique_token}"].upload(zip_file_path)
 
 
+class WandbLogger(BaseLogger):
+    """Logger for Weights & Biases."""
+
+    def __init__(self, cfg: DictConfig, unique_token: str) -> None:
+        tags = list(cfg.logger.kwargs.wandb_tag)
+        project = cfg.logger.kwargs.wandb_project
+
+        self.run = wandb.init(
+            entity="ruan-marl-masters",
+            project=project,
+            tags=tags,
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+
+        self.run.config.update(
+            {"git/current_branch": get_git_branch(), "git/commit_hash": get_git_commit()}
+        )
+
+        self.detailed_logging = cfg.logger.kwargs.detailed_wandb_logging
+
+        json_exp_path = get_logger_path(cfg, "json")
+        self.json_file_path = os.path.join(
+            cfg.logger.base_exp_path, f"{json_exp_path}/{unique_token}/metrics.json"
+        )
+        self.unique_token = unique_token
+        self.upload_json_data = cfg.logger.kwargs.upload_json_data
+
+    def log_stat(self, key: str, value: float, step: int, eval_step: int, event: LogEvent) -> None:
+        is_main_metric = "/" not in key or key.endswith("/mean")
+        if not self.detailed_logging and not is_main_metric:
+            return
+
+        value = value.item() if isinstance(value, (jax.Array, np.ndarray)) else value
+        self.run.log({f"{event.value}/{key}": value}, step=step)
+
+    def stop(self) -> None:
+        if self.upload_json_data:
+            self._zip_and_upload_json()
+        self.run.finish()
+
+    def _zip_and_upload_json(self) -> None:
+        zip_file_path = self.json_file_path.rsplit(".json", 1)[0] + ".zip"
+
+        with zipfile.ZipFile(zip_file_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(self.json_file_path)
+
+        artifact = wandb.Artifact(f"metrics_{self.unique_token}", type="metrics")
+        artifact.add_file(zip_file_path)
+        self.run.log_artifact(artifact)
+
+
 class TensorboardLogger(BaseLogger):
     """Logger for tensorboard"""
 
@@ -351,21 +404,23 @@ def _make_multi_logger(cfg: DictConfig) -> BaseLogger:
     unique_token = datetime.now().strftime("%Y%m%d%H%M%S")
 
     if (
-        cfg.logger.use_neptune
+        (cfg.logger.use_neptune or cfg.logger.use_wandb)
         and cfg.logger.use_json
         and cfg.logger.kwargs.upload_json_data
         and cfg.logger.kwargs.json_path
     ):
         raise ValueError(
-            "Cannot upload json data to Neptune when `json_path` is set in the base logger config. "
-            "This is because each subsequent run will create a larger json file which will use "
-            "unnecessary storage. Either set `upload_json_data: false` if you don't want to "
+            "Cannot upload json data to Neptune/WandB when `json_path` is set in the base logger "
+            "config. This is because each subsequent run will create a larger json file which will "
+            "use unnecessary storage. Either set `upload_json_data: false` if you don't want to "
             "upload your json data but store a large file locally or set `json_path: ~` in "
             "the base logger config."
         )
 
     if cfg.logger.use_neptune:
         loggers.append(NeptuneLogger(cfg, unique_token))
+    if cfg.logger.use_wandb:
+        loggers.append(WandbLogger(cfg, unique_token))
     if cfg.logger.use_tb:
         loggers.append(TensorboardLogger(cfg, unique_token))
     if cfg.logger.use_json:
