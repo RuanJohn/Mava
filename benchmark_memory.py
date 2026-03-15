@@ -28,6 +28,8 @@ import subprocess
 import sys
 from typing import Dict, List, Optional
 
+from tqdm import tqdm
+
 # --- Algorithm definitions ---
 # (module_path, config_name)
 ALGORITHMS = {
@@ -309,6 +311,7 @@ def write_row(csv_path: str, row: Dict, write_header: bool) -> None:
 
 
 def run_group(
+    group_name: str,
     algorithms: List[str],
     tasks: List[Dict],
     csv_path: str,
@@ -316,29 +319,32 @@ def run_group(
     write_header: bool,
 ) -> bool:
     """Run all algorithm x task combos for a group. Returns updated write_header."""
-    for task_info in tasks:
-        for algo_name in algorithms:
-            key = (algo_name, task_info["task"])
-            if key in completed:
-                print(f"SKIP {algo_name} x {task_info['task']} (already done)")
-                continue
+    combos = [(task_info, algo) for task_info in tasks for algo in algorithms]
+    pbar = tqdm(combos, desc=group_name, unit="run")
+    for task_info, algo_name in pbar:
+        key = (algo_name, task_info["task"])
+        if key in completed:
+            pbar.set_postfix_str(f"SKIP {algo_name} x {task_info['task']}")
+            continue
 
-            module_path, config_name = ALGORITHMS[algo_name]
-            print(f"RUN  {algo_name} x {task_info['task']} ({task_info['env']})")
+        pbar.set_postfix_str(f"{algo_name} x {task_info['task']}")
+        module_path, config_name = ALGORITHMS[algo_name]
 
-            peak_mb = run_single(algo_name, module_path, config_name, task_info["overrides"])
+        peak_mb = run_single(algo_name, module_path, config_name, task_info["overrides"])
 
-            row = {
-                "algorithm": algo_name,
-                "task": task_info["task"],
-                "env": task_info["env"],
-                "peak_memory_mb": f"{peak_mb:.1f}" if peak_mb is not None else "OOM",
-            }
-            write_row(csv_path, row, write_header)
-            write_header = False
+        row = {
+            "algorithm": algo_name,
+            "task": task_info["task"],
+            "env": task_info["env"],
+            "peak_memory_mb": f"{peak_mb:.1f}" if peak_mb is not None else "OOM",
+        }
+        write_row(csv_path, row, write_header)
+        write_header = False
 
-            if peak_mb is not None:
-                print(f"  OK: {peak_mb:.1f} MB")
+        if peak_mb is not None:
+            pbar.set_postfix_str(f"{algo_name} x {task_info['task']} -> {peak_mb:.1f} MB")
+        else:
+            pbar.set_postfix_str(f"{algo_name} x {task_info['task']} -> OOM")
 
     return write_header
 
@@ -367,21 +373,18 @@ def main() -> None:
     write_header = not os.path.exists(args.output) or os.path.getsize(args.output) == 0
 
     if args.group in ("climbing", "all"):
-        print("\n=== CLIMBING ===")
         write_header = run_group(
-            ALL_ALGORITHMS, CLIMBING_TASKS, args.output, completed, write_header
+            "Climbing", ALL_ALGORITHMS, CLIMBING_TASKS, args.output, completed, write_header
         )
 
     if args.group in ("array", "all"):
-        print("\n=== ARRAY GAMES ===")
         write_header = run_group(
-            ALL_ALGORITHMS, ARRAY_GAME_TASKS, args.output, completed, write_header
+            "Array Games", ALL_ALGORITHMS, ARRAY_GAME_TASKS, args.output, completed, write_header
         )
 
     if args.group in ("modern", "all"):
-        print("\n=== MODERN BENCHMARKS ===")
         write_header = run_group(
-            NEURAL_ALGORITHMS, MODERN_TASKS, args.output, completed, write_header
+            "Modern", NEURAL_ALGORITHMS, MODERN_TASKS, args.output, completed, write_header
         )
 
     print(f"\nDone. Results in {args.output}")
