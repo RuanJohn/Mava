@@ -18,7 +18,8 @@ Loops through all algorithm x task combinations, spawns each as a subprocess,
 and records peak GPU memory to a CSV file.
 
 Usage:
-    python benchmark_memory.py [--group climbing|array|modern|all] [--resume] [--output results.csv]
+    python benchmark_memory.py [--group climbing|array|modern|connector|humanoid|all] \\
+        [--resume] [--output results.csv]
 """
 
 import argparse
@@ -26,7 +27,7 @@ import csv
 import os
 import subprocess
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from tqdm import tqdm
 
@@ -71,6 +72,9 @@ NEURAL_ALGORITHMS = [
     "ff_ppo_central_factored",
     "ff_sable",
 ]
+
+# ff_ppo_central_factored is not used for continuous MaBrax / MPE benchmarks.
+NEURAL_ALGORITHMS_MABRAX_MPE = [a for a in NEURAL_ALGORITHMS if a != "ff_ppo_central_factored"]
 
 # All 10 algorithms for array games and climbing.
 ALL_ALGORITHMS = list(ALGORITHMS.keys())
@@ -192,33 +196,52 @@ for s in _LBF_SCENARIOS:
         {"task": s, "env": "LevelBasedForaging", "overrides": ["env=lbf", f"env/scenario={s}"]}
     )
 
-# MaBrax (5 tasks) — use env.scenario.name=X env.scenario.task_name=X.
+def _mabrax_overrides(scenario: str) -> List[str]:
+    """Hydra overrides for MaBrax. Values containing '|' must be quoted (see humanoid_9|8)."""
+    if "|" in scenario:
+        q = f'"{scenario}"'
+        return ["env=mabrax", f"env.scenario.name={q}", f"env.scenario.task_name={q}"]
+    return ["env=mabrax", f"env.scenario.name={scenario}", f"env.scenario.task_name={scenario}"]
+
+
+# MaBrax (5 tasks) — JaxMARL name is humanoid_9|8, not humanoid_9x8 (Hydra parses 'x' badly).
 _MABRAX_SCENARIOS = [
     "hopper_3x1",
     "halfcheetah_6x1",
     "walker2d_2x3",
     "ant_4x2",
-    "humanoid_9x8",
+    "humanoid_9|8",
 ]
 for s in _MABRAX_SCENARIOS:
     MODERN_TASKS.append(
         {
             "task": s,
             "env": "MaBrax",
-            "overrides": ["env=mabrax", f"env.scenario.name={s}", f"env.scenario.task_name={s}"],
+            "overrides": _mabrax_overrides(s),
+            "algorithms": NEURAL_ALGORITHMS_MABRAX_MPE,
         }
     )
 
-# Connector (4 tasks) — use scenario=X override.
+HUMANOID_MABRAX_TASKS = [
+    {
+        "task": "humanoid_9|8",
+        "env": "MaBrax",
+        "overrides": _mabrax_overrides("humanoid_9|8"),
+        "algorithms": NEURAL_ALGORITHMS_MABRAX_MPE,
+    }
+]
+
+# Connector (4 tasks) — vector observation space (vector-connector.yaml), scenario=X override.
 _CONNECTOR_SCENARIOS = ["con-5x5x3a", "con-7x7x5a", "con-10x10x10a", "con-15x15x23a"]
-for s in _CONNECTOR_SCENARIOS:
-    MODERN_TASKS.append(
-        {
-            "task": s,
-            "env": "MaConnector",
-            "overrides": ["env=connector", f"env/scenario={s}"],
-        }
-    )
+CONNECTOR_TASKS = [
+    {
+        "task": s,
+        "env": "VectorMaConnector",
+        "overrides": ["env=vector-connector", f"env/scenario={s}"],
+    }
+    for s in _CONNECTOR_SCENARIOS
+]
+MODERN_TASKS.extend(CONNECTOR_TASKS)
 
 # MPE (3 tasks) — use scenario=X override.
 _MPE_SCENARIOS = ["simple_spread_3ag", "simple_spread_5ag", "simple_spread_10ag"]
@@ -228,6 +251,7 @@ for s in _MPE_SCENARIOS:
             "task": s,
             "env": "MPE",
             "overrides": ["env=mpe", f"env/scenario={s}"],
+            "algorithms": NEURAL_ALGORITHMS_MABRAX_MPE,
         }
     )
 
@@ -268,6 +292,7 @@ def run_single(
 
     env = os.environ.copy()
     env["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    env.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
     try:
         result = subprocess.run(
@@ -319,7 +344,11 @@ def run_group(
     write_header: bool,
 ) -> bool:
     """Run all algorithm x task combos for a group. Returns updated write_header."""
-    combos = [(task_info, algo) for task_info in tasks for algo in algorithms]
+    combos: List[Tuple[Dict, str]] = []
+    for task_info in tasks:
+        algos = task_info.get("algorithms", algorithms)
+        for algo in algos:
+            combos.append((task_info, algo))
     pbar = tqdm(combos, desc=group_name, unit="run")
     for task_info, algo_name in pbar:
         key = (algo_name, task_info["task"])
@@ -353,7 +382,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="GPU memory benchmarking orchestrator.")
     parser.add_argument(
         "--group",
-        choices=["climbing", "array", "modern", "all"],
+        choices=["climbing", "array", "modern", "connector", "humanoid", "all"],
         default="all",
         help="Which task group to benchmark.",
     )
@@ -385,6 +414,16 @@ def main() -> None:
     if args.group in ("modern", "all"):
         write_header = run_group(
             "Modern", NEURAL_ALGORITHMS, MODERN_TASKS, args.output, completed, write_header
+        )
+
+    if args.group == "connector":
+        write_header = run_group(
+            "Connector", NEURAL_ALGORITHMS, CONNECTOR_TASKS, args.output, completed, write_header
+        )
+
+    if args.group == "humanoid":
+        write_header = run_group(
+            "Humanoid MaBrax", NEURAL_ALGORITHMS, HUMANOID_MABRAX_TASKS, args.output, completed, write_header
         )
 
     print(f"\nDone. Results in {args.output}")
