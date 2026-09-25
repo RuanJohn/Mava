@@ -64,6 +64,32 @@ case "$UBS" in
        echo "  ${GRN}✓${OFF} update_batch_size = $UPDATE_BATCH  (num_envs=$NUM_ENVS -> $((NDEV*UPDATE_BATCH*NUM_ENVS)) parallel copies)" ;;
   *)   echo "  ${RED}✗${OFF} ${UBS#ERR }"; exit 1 ;;
 esac
+
+# --- matrax must contain the cooperative-climbing fix (commit c2b92bb) -------
+MX=$($PY - <<'PYEOF'
+try:
+    import jax.numpy as jnp
+    from matrax.games.climbing import climbing_game as g
+    import numpy as np
+    a = np.asarray(g)
+    if a.shape[0] != 2:
+        print("ERR unexpected shape " + str(a.shape)); raise SystemExit
+    same = bool((a[0] == a[1]).all())
+    print(("ERR both agents share one payoff matrix -> PRE-FIX matrax"
+           if same else "OK agent 2 sees the transpose -> fixed matrax"))
+except Exception as e:
+    print(f"ERR could not import matrax: {e}")
+PYEOF
+)
+case "$MX" in
+  OK*) echo "  ${GRN}✓${OFF} matrax: ${MX#OK }" ;;
+  *)   echo "  ${RED}✗${OFF} matrax: ${MX#ERR }"
+       echo "       fix with:"
+       echo "         pip install --force-reinstall --no-deps --no-cache-dir \\"
+       echo "           'matrax @ git+https://github.com/RuanJohn/matrax@c2b92bb'"
+       exit 1 ;;
+esac
+
 UPDATES=$(( TOTAL_TIMESTEPS / ROLLOUT / UPDATE_BATCH / NUM_ENVS / NDEV ))
 echo "  ${GRN}✓${OFF} derived num_updates = $UPDATES  (target 2440)"
 [ "$UPDATES" -ne 2440 ] && { echo "  ${RED}✗${OFF} num_updates != 2440 — stopping."; exit 1; }
