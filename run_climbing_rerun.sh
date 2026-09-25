@@ -6,6 +6,26 @@
 # hyperparameters per algorithm, same 10 seeds, same 19,988,480 environment steps,
 # same 122 evaluations of 32 episodes.
 #
+# Ten algorithms. Seven carry the original TPU-sweep hyperparameters from
+# optimal_parameters/matrix-games-carbs-sweep.csv; three tabular variants
+# (factored / autoregressive / chained autoregressive) were tuned later by
+# tune_climbing_missing.py under the same CARBS protocol -- 40 trials on this same
+# fixed Climbing game -- and their values come from tuning_results/climbing-carbs-best.csv.
+#
+# Budget note for the three late additions
+#   CARBS tuned their num_updates to ~1190 (~9.7M steps); the original seven all tuned
+#   to the 2440 maximum. This script runs every algorithm at 2440 / 19,988,480 anyway:
+#   marl-eval aligns algorithms by evaluation index, so all ten must produce the same
+#   122 points or the curves cannot be aggregated onto shared axes. Their other tuned
+#   hyperparameters are used verbatim; only the horizon is made uniform, and running
+#   past a converged tabular policy does not change where it converged.
+#
+# Running a subset
+#   The marl-eval JSON logger MERGES into an existing metrics.json, so to add just the
+#   three without retouching the seven:
+#     ./run_climbing_rerun.sh ff_ppo_central_factored_tabular \
+#         ff_ppo_central_autoreg_tabular ff_ppo_central_autoreg_chained_tabular
+#
 # Device note
 #   total_timesteps = n_devices x num_updates x rollout_length x update_batch_size x num_envs
 #   The original ran on a TPU-v4 with 4 devices at update_batch_size=2, num_envs=8,
@@ -164,6 +184,27 @@ hparams () {
        system.gae_lambda=0.7375058453984705 system.gamma=0.4659544125359651 \
        system.max_grad_norm=4.307290361442906 system.num_minibatches=8 \
        system.ppo_epochs=8 system.vf_coef=0.0666047805329527 system.add_agent_id=False" ;;
+    # --- tuned 2026-09-25 by tune_climbing_missing.py (CARBS, 40 trials each,
+    #     Climbing-stateless-v0, post-fix matrax). Source:
+    #     tuning_results/climbing-carbs-best.csv
+    ff_ppo_central_factored_tabular) echo \
+      "system.actor_lr=0.00011112021076972583 system.critic_lr=0.00016468383156859992 \
+       system.ent_coef=0.009706841795231276 system.clip_eps=0.0847173821830581 \
+       system.gae_lambda=0.7534770546856423 system.gamma=0.9014857509700724 \
+       system.max_grad_norm=5.775572112893504 system.num_minibatches=8 \
+       system.ppo_epochs=3 system.vf_coef=0.18607979369617303 system.add_agent_id=False" ;;
+    ff_ppo_central_autoreg_tabular) echo \
+      "system.actor_lr=0.00010643760149201132 system.critic_lr=0.00012511986833019535 \
+       system.ent_coef=0.011183353770572585 system.clip_eps=0.05406721950724329 \
+       system.gae_lambda=0.6310405737267282 system.gamma=0.9473787126135559 \
+       system.max_grad_norm=2.8215254880664085 system.num_minibatches=8 \
+       system.ppo_epochs=5 system.vf_coef=0.05499893748883632 system.add_agent_id=False" ;;
+    ff_ppo_central_autoreg_chained_tabular) echo \
+      "system.actor_lr=0.00018066075983041944 system.critic_lr=0.0004176189812072225 \
+       system.ent_coef=0.00724932682823488 system.clip_eps=0.06429642407568345 \
+       system.gae_lambda=0.323195639497718 system.gamma=0.6193037975192678 \
+       system.max_grad_norm=1.2592191563515756 system.num_minibatches=8 \
+       system.ppo_epochs=3 system.vf_coef=0.34394618760624096 system.add_agent_id=False" ;;
     *) echo ""; return 1 ;;
   esac
 }
@@ -176,7 +217,9 @@ entrypoint () {
 }
 
 ALGOS=(ff_ippo ff_mappo ff_ppo_central ff_ppo_central_factored ff_sable
-       ff_ippo_tabular_split ff_ppo_central_tabular)
+       ff_ippo_tabular_split ff_ppo_central_tabular
+       ff_ppo_central_factored_tabular ff_ppo_central_autoreg_tabular
+       ff_ppo_central_autoreg_chained_tabular)
 [ $# -gt 0 ] && ALGOS=("$@")
 
 # ---------------------------------------------------------------- run
